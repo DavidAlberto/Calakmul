@@ -1,0 +1,160 @@
+---
+author: "David Alberto García Estrada (david.garcia.e@cinvestav.mx)"
+header-includes:
+- \usepackage{mathtools}
+- \usepackage{amsthm}
+- \usepackage{amssymb}
+- \usepackage{eufrak}
+- \usepackage{mathrsfs}
+- \usepackage{color}
+- \usepackage[spanish]{babel}
+- \usepackage{fancyhdr}
+- \usepackage{array}
+- \usepackage{subfigure} %para incluir mas de una figura en un solo espacio
+- \usepackage{graphicx}
+- \allowdisplaybreaks
+- \usepackage{float}
+- \usepackage{booktabs}
+- \usepackage{longtable}
+- \usepackage{array}
+- \usepackage{multirow}
+- \usepackage{wrapfig}
+- \usepackage{float}
+- \usepackage{colortbl}
+- \usepackage{pdflscape}
+- \usepackage{tabu}
+- \usepackage{threeparttable}
+- \usepackage{threeparttablex}
+- \usepackage[normalem]{ulem}
+- \usepackage{makecell}
+- \usepackage{xcolor}
+- \newtheorem{teorema}{Teorema}
+- \newtheorem{lema}[teorema]{Lema}
+- \newtheorem{corolario}[teorema]{Corolario}
+- \newtheorem{proposicion}[teorema]{Proposici\'on}
+- \newtheorem{conjetura}[teorema]{Conjetura}
+- \newtheorem{definicion}{Definici\'on}
+- \newtheorem{ejemplo}[teorema]{Ejemplo}
+- \newtheorem{nota}{Nota}
+output:
+  pdf_document:
+    toc_depth: 2
+    number_sections: yes
+    df_print: kable
+    highlight: tango
+    fig_caption: yes
+  html_document:
+    toc_depth: '2'
+    df_print: paged
+urlcolor: blue
+---
+
+\newcommand{\cb}{\color{blue}}
+\newcommand{\cg}{\color{green}}
+\newcommand{\cvi}{\color{violet}}
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r include = FALSE, echo = FALSE}
+##  LIBRERÍAS
+# Aquí vamos a incluir las librerías que necesitemos
+# En donde se pongan pedazos de código, únicamente se comentará
+# Es BUENA PRÁCTICA poner las librerías al principio, por ello las ponemos aquí
+# Primero deben asegurarse de tener instalados todos los paquetes
+
+```
+
+<!-- AQUÍ INICIA LA PÁGINA DE TÍTULO
+  Indicaciones:
+          El nombre de los autores aparece al principio
+-->
+
+\title{ {\sc Análisis de Metageómico}\\
+\vspace{1cm}{\sc Calakmul}\\ 
+\vspace{1cm}{\sc Amplicón rRNA 16s}\\
+   \vspace{1.5cm} {UGA - LANGEBIO CINVESTAV } \\
+       \vspace{1.5cm} {}\\[2cm]
+       }
+  
+\date{\vspace{5.5cm} Irapuato, Guanajuato, México\\
+      \vspace{1cm} Septiembre de 2022}
+
+ \maketitle
+ 
+
+\thispagestyle{fancy}
+\newpage
+
+<!-- FIN DE LA PÁGINA DE  TÍTULO-->
+
+<!-- INICIO ÍNDICE -->
+
+\tableofcontents
+\newpage
+<!-- FIN INDICE -->
+
+
+
+<!-- INICIO DOCUMENTO -->
+
+# Introducción
+
+Análisis de datos de rRNA 16s con las paqueterias de `DADA2` y `Mothur`, basado en curso de [CastroLab](http://www.castrolab.org/isme/dada2/dada2.html) y el paper [Bioconductor Workflow for Microbiome Data Analysis: from raw reads to community analyses](https://f1000research.com/articles/5-1492/v2).
+
+## Microbioma 
+
+El microbioma está formado por las comunidades ecológicas de microorganismos que dominan el mundo vivo. En la actualidad, las bacterias pueden identificarse mediante el uso de la secuenciación de nueva generación aplicada a varios niveles. La secuenciación Shotgun de todas las bacterias de una muestra permite conocer todos los genes presentes. Aquí sólo nos interesará la identificación y la cuantificación de taxones individuales (o especies) a través de un "gen de huella digital" llamado 16s rRNA que está presente en todas las bacterias. Este gen presenta varias regiones variables que pueden utilizarse para identificar los distintos taxones. 
+Los flujos de trabajo estándar anteriores dependían de la agrupación de todas las secuencias de ARNr 16s (generadas por la secuenciación de amplicones de próxima generación de próxima generación) que se encuentran dentro de un radio de similitud del 97% y, a continuación, asignarlas a "OTU" a partir de árboles de referencia2,3 .
+Estos enfoques no incorporan todos los datos, en particular la información sobre la calidad de la secuencia y la información estadística disponibles en las lecturas no se incorporaron a las asignaciones. 
+En cambio, los recuentos de lecturas de novo utilizados aquí se construirán mediante la incorporación tanto de las puntuaciones de calidad y las frecuencias de las secuencias en un modelo de ruido probabilístico para las transiciones de nucleótidos. Para más detalles sobre la implementación algorítmica algorítmica de este paso, véase el apartado 4.
+Después de filtrar las secuencias y eliminar las quimeras, los datos se comparan con una base de datos estándar de bacterias y etiquetados. En este flujo de trabajo, hemos utilizado las secuencias etiquetadas para construir una filogenia de novo con el fangornio. 
+El paso clave en el análisis de las secuencias es la forma en que las lecturas se denotan y se ensamblan en grupos que hemos decidido llamar RSV (Variantes de Secuencia Ribosómica) en lugar de las tradicionales OTU (Unidades Taxonómicas Operativas).
+Este artículo describe un flujo de trabajo computacional para realizar la eliminación de ruido, el filtrado, las transformaciones de datos, la visualización, los análisis de aprendizaje supervisado, las pruebas de redes comunitarias, las pruebas jerárquicas y los modelos lineales. Proporcionamos todo el código y damos varios ejemplos de diferentes tipos de análisis y casos de uso. A menudo hay muchos objetivos diferentes en los experimentos con datos del microbioma y sólo daremos una idea de lo que podría ser posible una vez que los datos se hayan importados en R.
+Además, el código puede ser fácilmente adaptado para acomodar efectos de lote, covariables y múltiples factores experimentales. experimentales.
+El flujo de trabajo se basa en paquetes de software del proyecto de código abierto Bioconductor5 . Proporcionamos todos los pasos de las lecturas como secuencias en bruto en archivos fastq hasta las pruebas comparativas y los análisis multivariantes de los datos. comparativo y los análisis multivariantes de las muestras y los análisis de las abundancias según las múltiples covariables disponibles
+
+### Paqueterias
+
+Definimos los paquetes que se utilizarán
+
+```{r}
+## Repositorio CRAN
+cran_packages <- c("bookdown", "knitr", "tidyverse", "plyr", "grid", "gridExtra", "kableExtra", "xtable", "ggpubr")
+## Repositorio Bioconductor
+bioc_packages <- c("phyloseq", "dada2", "DECIPHER", "phangorn", "ggpubr", "BiocManager","DESeq2", "microbiome", "philr")
+## Repositorio GitHub
+git_source <- c("twbattaglia/btools", "gmteunisse/Fantaxtic", "MadsAlbertsen/ampvis2", "opisthokonta/tsnemicrobiota")
+# fuente/nombre del paquete
+git_packages <- c("btools", "fantaxtic", "ampvis2", "tsnemicrobiota") #Nombre del paquete
+```
+
+Instalamos los paquetes, para ello es necesario que descomentes las siguientes líneas.
+
+```{r}
+# # Intalar paquetes CRAN
+# .inst <- cran_packages %in% installed.packages()
+# if(any(!.inst)) {
+#   install.packages(cran_packages[!.inst])
+# }
+# # Intalar paquetes BioConductor
+# if (!requireNamespace("BiocManager", quietly = TRUE))
+#     install.packages("BiocManager")
+# .inst <- bioc_packages %in% installed.packages()
+# if(any(!.inst)) {
+#   BiocManager::install(bioc_packages[!.inst])
+# }
+# # Instalar paquetes GitHub
+# .inst <- git_source %in% installed.packages()
+# install.packages("devtools")
+# if(any(!.inst)) {
+#   devtools::install_github(git_source[!.inst])
+# }
+# library("devtools")
+# install_github("opisthokonta/tsnemicrobiota")
+# install.packages("remotes")
+# remotes::install_github("kasperskytte/ampvis2")
+# devtools::install_github('twbattaglia/btools')
+```
+
