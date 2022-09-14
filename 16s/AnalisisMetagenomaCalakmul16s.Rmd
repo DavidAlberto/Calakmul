@@ -1,0 +1,340 @@
+---
+author: "David Alberto García Estrada (david.garcia.e@cinvestav.mx)"
+header-includes:
+- \usepackage{mathtools}
+- \usepackage{amsthm}
+- \usepackage{amssymb}
+- \usepackage{eufrak}
+- \usepackage{mathrsfs}
+- \usepackage{color}
+- \usepackage[spanish]{babel}
+- \usepackage{fancyhdr}
+- \usepackage{array}
+- \usepackage{subfigure} %para incluir mas de una figura en un solo espacio
+- \usepackage{graphicx}
+- \allowdisplaybreaks
+- \usepackage{float}
+- \usepackage{booktabs}
+- \usepackage{longtable}
+- \usepackage{array}
+- \usepackage{multirow}
+- \usepackage{wrapfig}
+- \usepackage{float}
+- \usepackage{colortbl}
+- \usepackage{pdflscape}
+- \usepackage{tabu}
+- \usepackage{threeparttable}
+- \usepackage{threeparttablex}
+- \usepackage[normalem]{ulem}
+- \usepackage{makecell}
+- \usepackage{xcolor}
+- \newtheorem{teorema}{Teorema}
+- \newtheorem{lema}[teorema]{Lema}
+- \newtheorem{corolario}[teorema]{Corolario}
+- \newtheorem{proposicion}[teorema]{Proposici\'on}
+- \newtheorem{conjetura}[teorema]{Conjetura}
+- \newtheorem{definicion}{Definici\'on}
+- \newtheorem{ejemplo}[teorema]{Ejemplo}
+- \newtheorem{nota}{Nota}
+output:
+  pdf_document:
+    toc_depth: 2
+    number_sections: yes
+    df_print: kable
+    highlight: tango
+    fig_caption: yes
+  html_document:
+    toc_depth: '2'
+    df_print: paged
+urlcolor: blue
+---
+
+\newcommand{\cb}{\color{blue}}
+\newcommand{\cg}{\color{green}}
+\newcommand{\cvi}{\color{violet}}
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r include = FALSE, echo = FALSE}
+##  LIBRERÍAS
+# Aquí vamos a incluir las librerías que necesitemos
+# En donde se pongan pedazos de código, únicamente se comentará
+# Es BUENA PRÁCTICA poner las librerías al principio, por ello las ponemos aquí
+# Primero deben asegurarse de tener instalados todos los paquetes
+sapply(c(cran_packages, bioc_packages, git_packages), require, character.only = TRUE)
+library("phyloseq")
+library("ggplot2")
+library("readr")
+library("patchwork")
+library("pheatmap")
+library("microbiome")
+library("xtable")
+library("tsnemicrobiota")
+library("Rtsne")
+library("ampvis2")
+library("btools")
+```
+
+<!-- AQUÍ INICIA LA PÁGINA DE TÍTULO
+  Indicaciones:
+          El nombre de los autores aparece al principio
+-->
+
+\title{ {\sc Análisis de Metageómico}\\
+\vspace{1cm}{\sc Calakmul}\\ 
+\vspace{1cm}{\sc Amplicón rRNA 16s}\\
+   \vspace{1.5cm} {UGA - LANGEBIO CINVESTAV } \\
+       \vspace{1.5cm} {}\\[2cm]
+       }
+  
+\date{\vspace{5.5cm} Irapuato, Guanajuato, México\\
+      \vspace{1cm} Septiembre de 2022}
+
+ \maketitle
+ 
+
+\thispagestyle{fancy}
+\newpage
+
+<!-- FIN DE LA PÁGINA DE  TÍTULO-->
+
+<!-- INICIO ÍNDICE -->
+
+\tableofcontents
+\newpage
+<!-- FIN INDICE -->
+
+
+
+<!-- INICIO DOCUMENTO -->
+
+# Introducción
+
+Análisis de datos de rRNA 16s con las paqueterias de `DADA2` y `Mothur`, basado en curso de [CastroLab](http://www.castrolab.org/isme/dada2/dada2.html) y el paper [Bioconductor Workflow for Microbiome Data Analysis: from raw reads to community analyses](https://f1000research.com/articles/5-1492/v2).
+
+## Microbioma 
+
+El microbioma está formado por comunidades ecológicas de microrganismos. En la actualidad, las bacterias pueden identificarse mediante el uso de la secuenciación de nueva generación aplicada a varios niveles. La secuenciación Shotgun de todas las bacterias de una muestra permite conocer todos los genes presentes. Aquí sólo nos interesará la identificación y la cuantificación de taxones individuales (o especies) a través de un "gen de huella digital" llamado 16s rRNA que está presente en todas las bacterias. Este gen presenta varias regiones variables que pueden utilizarse para identificar los distintos taxones. 
+Los flujos de trabajo estándar anteriores dependían de la agrupación de todas las secuencias de ARNr 16s (generadas por la secuenciación de amplicones de próxima generación de próxima generación) que se encuentran dentro de un radio de similitud del 97% y, a continuación, asignarlas a "OTU" a partir de árboles de referencia. Estos enfoques no incorporan todos los datos, en particular la información sobre la calidad de la secuencia y la información estadística disponibles en las lecturas no se incorporaron a las asignaciones. 
+En cambio, los recuentos de lecturas *de novo* utilizados aquí se construirán mediante la incorporación tanto de las puntuaciones de calidad y las frecuencias de las secuencias en un modelo de ruido probabilístico para las transiciones de nucleótidos. 
+Después de filtrar las secuencias y eliminar las quimeras, los datos se comparan con una base de datos estándar de bacterias y etiquetados. Aquí usamos las secuencias etiquetadas para construir una filogenia *de novo* con el *phangorn*.
+El paso clave en el análisis de las secuencias es la forma en que las lecturas se denotan y se ensamblan en grupos que hemos decidido llamar RSV (Variantes de Secuencia Ribosómica) en lugar de las tradicionales OTU (Unidades Taxonómicas Operativas).
+Aquí describimos el flujo de trabajo computacional para realizar la **eliminación de ruido**, el **filtrado**, las **transformaciones de datos**, la **visualización**, los **análisis de aprendizaje supervisado**, las **pruebas de redes comunitarias**, las **pruebas jerárquicas** y los **modelos lineales**. 
+
+## Paqueterias
+
+Definimos los paquetes que se utilizarán
+
+```{r}
+## Repositorio CRAN
+cran_packages <- c("bookdown", "knitr", "tidyverse", "plyr", "grid", "gridExtra", "kableExtra", "xtable", "ggpubr")
+## Repositorio Bioconductor
+bioc_packages <- c("phyloseq", "dada2", "DECIPHER", "phangorn", "ggpubr", "BiocManager","DESeq2", "microbiome", "philr")
+## Repositorio GitHub
+git_source <- c("twbattaglia/btools", "gmteunisse/Fantaxtic", "MadsAlbertsen/ampvis2", "opisthokonta/tsnemicrobiota")
+# fuente/nombre del paquete
+git_packages <- c("btools", "fantaxtic", "ampvis2", "tsnemicrobiota") #Nombre del paquete
+```
+
+Instalamos los paquetes, para ello es necesario que descomentes las siguientes líneas.
+
+```{r}
+# # Intalar paquetes CRAN
+# .inst <- cran_packages %in% installed.packages()
+# if(any(!.inst)) {
+#   install.packages(cran_packages[!.inst])
+# }
+# # Intalar paquetes BioConductor
+# if (!requireNamespace("BiocManager", quietly = TRUE))
+#     install.packages("BiocManager")
+# .inst <- bioc_packages %in% installed.packages()
+# if(any(!.inst)) {
+#   BiocManager::install(bioc_packages[!.inst])
+# }
+# # Instalar paquetes GitHub
+# .inst <- git_source %in% installed.packages()
+# install.packages("devtools")
+# if(any(!.inst)) {
+#   devtools::install_github(git_source[!.inst])
+# }
+# library("devtools")
+# install_github("opisthokonta/tsnemicrobiota")
+# install.packages("remotes")
+# remotes::install_github("kasperskytte/ampvis2")
+# devtools::install_github('twbattaglia/btools')
+```
+
+Cargamos los paquetes
+
+```{r}
+sapply(c(cran_packages, bioc_packages, git_packages), require, character.only = TRUE)
+library("phyloseq")
+library("ggplot2")
+library("readr")
+library("patchwork")
+library("pheatmap")
+library("microbiome")
+library("xtable")
+library("tsnemicrobiota")
+library("Rtsne")
+library("ampvis2")
+library("btools")
+```
+
+# DADA2
+
+El paquete **DADA2** infiere las variantes exactas de la secuencia de amplicones (ASVs) a partir de datos de secuenciación de amplicones de alto rendimiento, sustituyendo el enfoque de agrupación de OTUs, más grueso y menos preciso. La línea de producción **DADA2** toma como entrada archivos fastq desmultiplexados, y produce las variantes de secuencia y sus abundancias en las muestras después de eliminar los errores de sustitución y quimera. La clasificación taxonómica está disponible a través de una implementación nativa del clasificador bayesiano ingenuo RDP, y la asignación a nivel de especie de los fragmentos del gen 16S rRNA por coincidencia exacta.
+
+**DADA2** ofrece ventajas con respecto a la estrategia de formar clusters (OTUs) en varios aspectos que incluyen *mayor resolución*, *nombres consistentes entre diferentes análisis*, *mejor estimación de abundancias relativas*, etc. 
+
+## Directorio de trabajo
+
+Ajustamos directorio de trabajo donde se encuentran las lecturas "reads"
+```{r}
+# IMPORTANTE
+# Ajustamos path de trabajo según tu PC
+# Mostramos directorio actual
+getwd()
+# Si es necesario, cambiar la ruta donde están los archivos almacenados. 
+# "." significa el directorio actual. 
+workingDir <-  "."
+setwd(workingDir)
+# Creamos directorio de Resultados
+dir.create("Resultados/")
+# Asignamos la carpeta donde están las lecturas crudas
+miseq_path <- "RawData"
+list.files(miseq_path)
+```
+
+## Ordenamos las lecturas
+
+En **DADA2** las lecturas se trabajan inicialmente por separado, es decir, la copia Forward o R1 separada de la copia Reverse o R2. Por esto, nos tenemos que asegurar que ambos archivos estén ordenados. Luego, manipulamos el nombre de los archivos para generar automáticamente el nombre de las muestras en nuestro análisis:
+
+```{r}
+# Ordenamos los nombres de los archivos y los metemos a una variable
+fnFs <- sort(list.files(miseq_path, pattern="_R1.fastq.gz"))
+fnRs <- sort(list.files(miseq_path, pattern="_R2.fastq.gz"))
+
+# Extracción del nombre de las muestras
+sampleNames <- sapply(strsplit(fnFs, "_R"), `[`, 1)
+sampleNames
+
+# Especificamos el path completo para evitar errores de ambigüedad
+fnFs <- file.path(miseq_path, fnFs)
+fnRs <- file.path(miseq_path, fnRs)
+fnFs
+fnRs
+```
+
+## Visualización de calidad
+
+El paquete **DADA2** tiene muchas funciones útiles para el pre-procesamiento de los datos. A continuación se visualiza el perfil de calidad de las muestras para cada par de 5’ a 3’:
+
+```{r, include = TRUE, echo = TRUE, fig.pos = 'H', fig.dim = c(12,8), fig.align = "center", message=FALSE, fig.cap = 'Perfil de calidad de las lecturas de dos archivos fastq.'}
+plotQualityProfile(fnFs[1:2]) #Solo de las primeras 2  
+plotQualityProfile(fnRs[1:2]) #Solo de las primeras 2 
+```
+
+## Filtrado y corte
+
+Ahora vamos a proceder con el filtrado y corte de las lecturas de acuerdo a lo observado en los gráficos de calidad. Primero creamos un directorio donde vamos a poner las lecturas una vez realizado el control de calidad, y luego realizamos dicho control. En específico usamos los argumentos 
++ trunLen = corte promedio de cada read
++ maxN = número máximo de bases indeterminadas
++ maxEE = número máximo de errores
++ truncQ = Corta lecturas que el valor de calidad es menor a un valor
++ rm.phix = si es que queremos remover secuencias pertenecientes al control interno de Illumina
+
+```{r}
+# Creamos un directorio para poner las lecturas "limpias"
+filt_path <- file.path("Filtered/") 
+filt_path
+
+if(!file_test("-d", filt_path)) dir.create(filt_path)
+filtFs <- file.path(filt_path, paste0(sampleNames, "_F_filt.fastq.gz"))
+filtRs <- file.path(filt_path, paste0(sampleNames, "_R_filt.fastq.gz"))
+
+# Y finalmente procedemos con el control de calidad
+out <- filterAndTrim(fnFs, filtFs, fnRs, filtRs, truncLen = c(300,250),
+              maxN = 0, maxEE = c(2,2), truncQ = 2, rm.phix = TRUE,
+              compress = TRUE, multithread = FALSE) 
+# Si usan Windows, configuren multithread=FALSE
+```
+
+**DADA2** genera un modelo probabilístico de errores con el cual puede filtrar lecturas erróneas y así usar las restantes directamente para la etapa de clasificación taxonómica. Esta parte del método es la que nos permite tener una mayor resolución en comparación a los análisis basados en OTUs. 
+
+## De-replicar
+
+Como las muestras probablemente tienen lecturas idénticas, no es eficiente usar cada una de ellas para los pasos río abajo. Por esto, **DADA2** recomienda *de-replicar* las muestras para así disminuir la redundancia y avanzar eficientemente.
+
+```{r}
+# De-replicar
+derepFs <- derepFastq(filtFs, verbose = TRUE)
+derepRs <- derepFastq(filtRs, verbose = TRUE)
+
+# Agregamos los nombres de las muestras al objeto de-replicado
+names(derepFs) <- sampleNames
+names(derepRs) <- sampleNames
+```
+
+Una vez con las muestras de-replicadas procedemos a generar un modelo de errores. Para mayor detalle sobre este crucial paso revisen el artículo original [aquí](https://www.nature.com/articles/nmeth.3869).
+
+```{r}
+errF <- learnErrors(filtFs, multithread=TRUE)
+errR <- learnErrors(filtRs, multithread=TRUE)
+
+# Graficamos los errores para cada par
+plotErrors(errF, nominalQ=TRUE)
+plotErrors(errR, nominalQ=TRUE)
+```
+
+Se muestran las tasas de error para cada transición posible (A→C, A→G, …). Los puntos son las tasas de error observadas para cada puntaje de calidad de consenso. La línea negra muestra las tasas de error estimadas después de la convergencia del algoritmo de aprendizaje automático. La línea roja muestra las tasas de error esperadas según la definición nominal de la puntuación Q. 
+Aquí, las tasas de error estimadas (línea negra) NO SE AJUSTA bien a las tasas observadas (puntos), y las tasas de error disminuyen con una mayor calidad pero NO como se esperaba. 
+
+## Amplicon Sequence Variants (ASVs)
+
+Con esta información procedemos al paso más importante de la pipeline, **la inferencia de las Amplicon Sequence Variants (ASVs)**. El método de inferencia de secuencias **DADA2** puede funcionar en dos modos diferentes: *Inferencia independiente por muestra* (`pool=FALSE`), y la *inferencia a partir de las lecturas de secuenciación agrupadas de todas las muestras* (`pool=TRUE`). La inferencia independiente tiene la ventaja de que el tiempo de cálculo es lineal en el número de muestras, y los requisitos de memoria son planos con el número de muestras. Esto permite escalar a conjuntos de datos de tamaño casi ilimitado. La inferencia conjunta es más exigente desde el punto de vista computacional y puede llegar a ser intratable para conjuntos de datos de decenas de millones de lecturas. Sin embargo, la agrupación mejora la detección de variantes raras que se observan sólo una o dos veces en una muestra individual, pero muchas veces en todas las muestras. 
+
+```{r}
+dadaFs <- dada(derepFs, err=errF, multithread=TRUE, pool = TRUE)
+dadaRs <- dada(derepRs, err=errR, multithread=TRUE, pool = TRUE)
+```
+
+Inspeccionando el objeto de clase `dada` devuelto: 
+
+```{r}
+dadaFs[[1]]
+dadaRs[[1]]
+```
+
+El algoritmo **DADA2** infirió 3043 variantes de secuencia verdadera de las secuencias únicas de 37332 en la primera muestra y 2200 variantes de secuencia verdadera de las secuencias únicas de 38947 en la segunda muestra. Hay mucho más en el objeto de retorno de la clase *dada*, incluidos múltiples diagnósticos sobre la calidad de cada variante de secuencia eliminada.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
