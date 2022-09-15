@@ -63,6 +63,15 @@ knitr::opts_chunk$set(echo = TRUE)
 # En donde se pongan pedazos de código, únicamente se comentará
 # Es BUENA PRÁCTICA poner las librerías al principio, por ello las ponemos aquí
 # Primero deben asegurarse de tener instalados todos los paquetes
+
+## Repositorio CRAN
+cran_packages <- c("bookdown", "knitr", "tidyverse", "plyr", "grid", "gridExtra", "kableExtra", "xtable", "ggpubr")
+## Repositorio Bioconductor
+bioc_packages <- c("phyloseq", "dada2", "DECIPHER", "phangorn", "ggpubr", "BiocManager","DESeq2", "microbiome", "philr")
+## Repositorio GitHub
+git_source <- c("twbattaglia/btools", "gmteunisse/Fantaxtic", "MadsAlbertsen/ampvis2", "opisthokonta/tsnemicrobiota")
+# fuente/nombre del paquete
+git_packages <- c("btools", "fantaxtic", "ampvis2", "tsnemicrobiota") #Nombre del paquete
 sapply(c(cran_packages, bioc_packages, git_packages), require, character.only = TRUE)
 library("phyloseq")
 library("ggplot2")
@@ -310,29 +319,482 @@ dadaRs[[1]]
 
 El algoritmo **DADA2** infirió 3043 variantes de secuencia verdadera de las secuencias únicas de 37332 en la primera muestra y 2200 variantes de secuencia verdadera de las secuencias únicas de 38947 en la segunda muestra. Hay mucho más en el objeto de retorno de la clase *dada*, incluidos múltiples diagnósticos sobre la calidad de cada variante de secuencia eliminada.
 
+## Combinar lecturas emparejadas
+
+Ahora fusionamos las lecturas directa y reversa para obtener las secuencias completas sin ruido. La fusión se realiza alineando las *lecturas directas eliminadas de ruido* con el *complemento reverso de las lecturas reversas eliminadas de ruido correspondientes*, y luego construyendo las secuencias "contig" fusionadas. De forma predeterminada, las secuencias fusionadas solo se emiten si las lecturas directa e inversa se superponen en al menos 12 bases y son idénticas entre sí en la región de superposición (pero estas condiciones se pueden cambiar a través de argumentos de función). 
+
+```{r}
+# Unimos las reads
+mergers <- mergePairs(dadaFs, derepFs, dadaRs, derepRs)
+```
+
+El objeto de `mergers` es una lista de marcos de datos de cada muestra. Cada data.frame contiene la `$sequence`, su `$abundance` y los índices de las variantes de secuencia `$forward` y `$reverse` que se fusionaron. `mergePairs` eliminó las lecturas emparejadas que no se superponían exactamente, lo que redujo aún más la salida espuria. 
+
+## Construir tabla de secuencia
+
+Ahora podemos construir una tabla de variantes de secuencia de amplicón (ASV), una versión de mayor resolución de la tabla OTU producida por métodos tradicionales.
+
+```{r}
+# Generamos una tabla de secuencias
+seqtabAll <- makeSequenceTable(mergers[!grepl("Mock", names(mergers))])
+dim(seqtabAll)
+table(nchar(getSequences(seqtabAll)))
+```
+
+La tabla de secuencias es una matriz con filas correspondientes a (y nombradas por) las muestras y columnas correspondientes (y nombradas por) las variantes de secuencia. 
+
+## Removemos quimeras
+
+El método `dada` corrige errores de sustitución e indel (insersión / deleción), pero quedan quimeras (producto de la amplificación por PCR). Afortunadamente, la precisión de las variantes de secuencia después de eliminar el ruido hace que identificar ASV quiméricos sea más simple que cuando se trata de OTU difusas. Las secuencias quiméricas se identifican si pueden reconstruirse exactamente combinando un segmento izquierdo y un segmento derecho de dos secuencias "primarias" más abundantes. 
+
+```{r}
+seqtabNoC <- removeBimeraDenovo(seqtabAll, method="consensus", multithread=TRUE, verbose=TRUE)
+dim(seqtabNoC)
+sum(seqtabNoC)/sum(seqtabAll)
+```
+
+La frecuencia de las secuencias quiméricas varía sustancialmente de un conjunto de datos a otro y depende de factores que incluyen los procedimientos experimentales y la complejidad de la muestra. Cuando tomamos en cuenta la abundancia de esas variantes, vemos que representan alrededor del 22 % de las lecturas de secuencias fusionadas.
+
+## Seguimiento de lecturas por cada paso
+
+Como verificación final de nuestro progreso, veremos la cantidad de lecturas que se realizaron en cada paso: 
+
+```{r}
+getN <- function(x) sum(getUniques(x))
+track <- cbind(out, sapply(dadaFs, getN), sapply(dadaRs, getN), sapply(mergers, getN), rowSums(seqtabNoC))
+# Si procesa una sola muestra, elimine las llamadas de sapply: p. reemplace sapply(dadaFs, getN) con getN(dadaFs) 
+colnames(track) <- c("input", "filtered", "denoisedF", "denoisedR", "merged", "nonchim")
+rownames(track) <- sampleNames
+head(track)
+```
+
+## Asignación Taxonómica
+
+Es común en este punto, especialmente en la secuenciación de amplicón 16S/18S/ITS, asignar taxonomía a las variantes de secuencia. El paquete **DADA2** proporciona una implementación nativa del método *clasificador bayesiano ingenuo* para este propósito. La función de `assignTaxonomy` toma como entrada un conjunto de secuencias para clasificar y un conjunto de entrenamiento de secuencias de referencia con taxonomía conocida, y genera asignaciones taxonómicas con al menos `minBoot` bootstrap confianza.
+Mantenemos fastas de entrenamiento formateados para el conjunto de entrenamiento *RDP*, *GreenGenes* agrupados en un 97 % de identidad y la base de datos de referencia *Silva*, y se han contribuido fastas de entrenamientos adicionales adecuados para protistas y ciertos entornos específicos. Para la taxonomía fúngica, los archivos de publicación de General Fasta de la base de datos *UNITE ITS* se pueden usar tal cual. 
+Para continuar, descargue el archivo `silva_nr_v138_train_set.fa.gz` y colóquelo en el directorio con los archivos fastq. 
+La *tabla de secuencias sin las quimeras*, es la tabla que usamos para realizar la clasificación taxonómica. En principio, podríamos usar cualquiera de las tres bases de datos más populares para clasificación de secuencias del 16S rRNA, i.e., GreenGenes, RDP o SILVA.
+
+### SILVA versión 138
+
+**SILVA** proporciona conjuntos de datos completos, de calidad comprobada y actualizados periódicamente de secuencias alineadas de RNA ribosomal (rRNA) pequeñas (16S/18S, SSU) y subunidades grandes (23S/28S, LSU) para los tres dominios de la vida (bacterias, arqueas y eucariotas). 
+
+```{r}
+fastaRef <- "Silva/silva_nr_v138_train_set.fa"
+taxTab <- assignTaxonomy(seqtabNoC, refFasta = fastaRef, multithread=TRUE)
+```
+
+El paquete **DADA2** también implementa un método para realizar **asignaciones de nivel de especie** basadas en coincidencias exactas entre ASV y cepas de referencia secuenciadas. Un análisis reciente sugiere que la coincidencia exacta (o el 100 % de identidad) es la única forma adecuada de asignar especies a los fragmentos del gen 16S. Actualmente, los fastas de entrenamiento de asignación de especies están disponibles para las bases de datos **Silva** y **RDP** 16S. Para seguir el paso opcional de adición de especies, descargue el archivo `silva_species_assignment_v138.fa.gz` y colóquelo en el directorio con los archivos fastq. 
+
+```{r}
+# En el caso de querer agregar el rango taxonómico de especies, simplemente usamos una base de datos extra, la cual contiene esta información. 
+taxTabExtra <- addSpecies(taxTab, "Silva/silva_species_assignment_v138.fa", verbose=TRUE)
+unname(head(taxTab)) -> tabla
+colnames(tabla) <- c("Kingdom", "Phylum", "Order", "Class", "Family", "Genus")
+head(tabla)
+```
+
+**Alternativas**: El método de clasificación taxonómica `IdTaxa` desarrollado recientemente también está disponible a través del paquete *DECIPHER Bioconductor*. El documento que presenta el algoritmo **IDTAXA** informa un rendimiento de clasificación que es mejor que el estándar establecido durante mucho tiempo por el *clasificador bayesiano ingenuo*. Aquí incluimos un bloque de código que le permite usar `IdTaxa` como un reemplazo directo para `assignTaxonomy` (¡y también es más rápido!). Los clasificadores capacitados están disponibles en http://DECIPHER.codes/Downloads.html. Descargue el archivo SILVA SSU r132 (modificado) para continuar. 
+
+```{r}
+#library(DECIPHER); packageVersion("DECIPHER")
+#dna <- DNAStringSet(getSequences(seqtabNoC)) # Crea un DNAStringSet desde el ASVs
+#load("~/Documents/calakmul/16S/SILVA_SSU_r138_2019.RData") # Asignamos la dirección de archivo SSU modicado .RData
+#ids <- IdTaxa(dna, trainingSet, strand="top", processors=NULL, verbose=FALSE) #  usar todos los procesadores
+#ranks <- c("Domain", "Phylum", "Class", "Order", "Family", "Genus", "Species") # rangos de interés
+# Convierta el objeto de salida de la clase "Taxa" en una matriz análoga a la salida de AssignTaxonomy 
+#taxid <- t(sapply(ids, function(x) {
+#        m <- match(ranks, x$rank)
+#        taxa <- x$taxon[m]
+#        taxa[startsWith(taxa, "unclassified_")] <- NA
+#        taxa
+#}))
+#colnames(taxid) <- ranks; rownames(taxid) <- getSequences(seqtabNoC)
+```
+
+La matriz `taxid` de `IdTaxa` es un reemplazo directo de la matriz `taxa` de `AssignTaxonomy`, simplemente configure `taxa <- taxid` para continuar usando las asignaciones de `IdTaxa`.
+
+## Árbol filogenético
+
+Ya que nuestro perfil taxonómico se construye con secuencias homólogas del gen rRNA 16s, podemos usar estas secuencias para inferir un árbol filogenético. Existen muchos paquetes de R que pueden hacer esto y aquí escogemos phangorn para hacer una inferencia basada en **Maximum Likelihood**.
+Primero alineamos las secuencias:
+
+```{r}
+seqs <- getSequences(seqtabNoC)
+# Este paso propaga los nombres de las secuencias al árbol
+names(seqs) <- seqs
+alignment <- AlignSeqs(DNAStringSet(seqs), anchor=NA,verbose=FALSE)
+```
+
+Y con ese alineamiento inferimos un árbol de partida o starting tree para inicializar la búsqueda por **Maximum Likelihood** (ML). También ajustamos un modelo de sustitución nucleotídica para parametrizar la tasa de cambio de un nucleótido a otro y así poder inferir correctamente el largo de las ramas y la topología del árbol.
+
+```{r}
+phangAlign <- phyDat(as(alignment, "matrix"), type="DNA")
+dm <- dist.ml(phangAlign)
+treeNJ <- NJ(dm) 
+fit <- pml(treeNJ, data = phangAlign)
+fitGTR <- update(fit, k=4, inv=0.2)
+# El modelo de opción en pml sólo se utiliza para los modelos de aminoácidos. 
+# El la siguiente función tarda mucho
+# fitGTRoptim <- optim.pml(fitGTR, model="GTR", optInv=TRUE, optGamma=TRUE,
+#        rearrangement = "stochastic", control = pml.control(trace = 0))
+# detach("package:phangorn", unload=TRUE)
+```
+
+# Metadatos
+
+Ahora, tenemos todos los ingredientes para formar un objeto de R que contenga todo lo que nos importa en un experimento metagenómico, por ejemplo, una *tabla de cuentas* que indica el número de lecturas por seceuncia del gen rRNA 16s, una *tabla con el linaje taxonómico* de esas secuencias, un *árbol filogenético* que relaciona esas secuencias entre sí, y finalmente, una *tabla con variables asociadas* a nuestras muestras, también llamada metadata.
+
+```{r}
+samdf <- read.csv("Metadata16s.csv", header=TRUE, row.names = 1)
+rownames(seqtabNoC) %in% rownames(samdf)
+all(rownames(seqtabAll) %in% samdf$run)
+```
+
+# Phyloseq
+
+**Phyloseq** es un paquete de Bioconductor para la manipulación y análisis de datos metagenómicos generados por metodologías de secuenciación de alto rendimiento. **Phyloseq** es una herramienta para *importar*, *guardar*, *analizar* y *visualizar* éste tipo de datos después de haber sido procesados inicialmente, por ejemplo, *ensamblaje de novo*, *ASVs* u *OTUs* (clustered), incluyendo otros importantes datos asociados (si están disponibles): *tabla de observaciones asociadas a cada muestra* (por jemplo: *especie*, *localización geográfica*, *temperatura*, etc.), conocida como sample data o *metadata*, *árbol filogenético*, e *identificación taxonómica* de cada OTU. La estructura del paquete **Phyloseq** consiste en una serie de funciones de acceso y de proceso de objetos phyloseq. Estos objetos están compuestos de cuatro componentes que almacenan las cuentas de reads, la metadata, la taxonomía y el árbol filogenético. El paquete también provee una serie de herramientas para importar datos de otros programas.
+
+Con estos elementos procedemos a generar un objeto phyloseq:
+```{r}
+ps <- phyloseq(otu_table(seqtabNoC, taxa_are_rows=FALSE), 
+               sample_data(samdf), 
+               tax_table(taxTab),
+               phy_tree(fitGTR$tree))
+ps <- prune_samples(sample_names(ps) != "Mock", ps) # Remover potenciales muestras sintéticas
+ps
+```
+
+ El siguiente diagrama muestra la estructura completa de phyloseq.
+
+```{r}
+# Leémos el objeto phyloseq del análisis por DADA2
+ps
+class(ps)
+```
+
+Es más conveniente usar nombres cortos para nuestros ASV (por ejemplo, ASV21) en lugar de la secuencia de ADN completa cuando se trabaja con algunas de las tablas y visualizaciones de phyloseq, pero queremos mantener las secuencias de ADN completas para otros fines, como fusionar con otros conjuntos de datos o la indexación en bases de datos de referencia como Earth Microbiome Project. Por esa razón, almacenaremos las secuencias de ADN de nuestros ASV en la ranura refseq del objeto phyloseq y luego cambiaremos el nombre de nuestros taxones a una cadena corta. De esa forma, los nombres breves de los nuevos taxones aparecerán en tablas y gráficos, y aún podemos recuperar las secuencias de ADN correspondientes a cada ASV según sea necesario con refseq(ps). 
+
+```{r}
+dna <- Biostrings::DNAStringSet(taxa_names(ps))
+names(dna) <- taxa_names(ps)
+ps <- merge_phyloseq(ps, dna)
+taxa_names(ps) <- paste0("ASV", seq(ntaxa(ps)))
+ps
+# Generamos otro archivo con el que empezamos a trabajar
+psd <- ps
+```
+
+## Control de calidad del análisis de 16S
+
+Lo primero que podemos mirar es la prevalencia de las features taxonómicas. Primero creamos un data frame con los valores de prevalencia, luego les agregamos la taxonomía y graficamos.
+
+```{r}
+# Computamos prevalencia para cada feature y la guardamos en un data frame
+prevdf <- apply(X = otu_table(psd),
+               MARGIN = ifelse(taxa_are_rows(psd), yes = 1, no = 2),
+               FUN = function(x){sum(x > 0)})
+
+# Le agregamos la taxonomía
+prevdf <- data.frame(Prevalence = prevdf,
+                    TotalAbundance = taxa_sums(psd),
+                    tax_table(psd))
+
+plyr::ddply(prevdf, "Phylum", function(df1){cbind(mean(df1$Prevalence),sum(df1$Prevalence))}) -> dfprev
+kable(dfprev)
+```
+
+Al examinar la tabla, es evidente que algunos Phylum aunque presentes, están muy poco representados. La columna 1 representa la media de read counts para ese Phylum, mientras que la columna 2 representa la suma. Por ejemplo, grupos como *Calditrichota* y *Dadabacteria* están representados solamente por 1 read. Es muy riesgoso mantener estos grupos taxonómicos en el análisis ya que pueden corresponder a falsos positivos. Para filtrarlos, generamos un vector con todas las taxa que queremos filtrar.
+
+```{r}
+# Definimos taxa a filtrar
+filterPhyla <- c("Calditrichota", "Dadabacteria", NA)
+# Procedemos a filtrar
+psd1 <- subset_taxa(psd, !Phylum %in% filterPhyla)
+```
+
+```{r}
+# Además aprovechamos a remover taxa que no corresponde a microorganismos como cloroplastos, mitocondrias y otros
+filterPhyla2 <- c("Chloroplast", "Mitochondria", "Eukaryota")
+psd1 <- subset_taxa(psd1, !Kingdom %in% filterPhyla2)
+psd1 <- subset_taxa(psd1, !Phylum %in% filterPhyla2)
+psd1 <- subset_taxa(psd1, !Class %in% filterPhyla2)
+psd1 <- subset_taxa(psd1, !Order %in% filterPhyla2)
+psd1 <- subset_taxa(psd1, !Family %in% filterPhyla2)
+psd1 <- subset_taxa(psd1, !Genus %in% filterPhyla2)
+```
+
+Además del filtrado que acabamos de realizar, existen otros tipos de filtrado que tienen que ver con la media de cuentas por lectura por taxa, con la distribución de éstas, y con filtrar muestras bajo un número lecturas.
+
+```{r}
+# Filtramos taxa de acuerdo a un umbral de número medio de _read counts_, en este caso 1e-5
+psd2 <- filter_taxa(psd1, function(x) mean(x) > 1e-5, TRUE)
+# También podemos remover taxa que no se observe más de X veces en al menos 10% de las muestras
+psd3 <- filter_taxa(psd2, function(x) sum(x > 2) > (0.1*length(x)), TRUE)
+# Y finalmente filtrar muestras con menos de 1000 reads
+psd4 <- prune_samples(sample_sums(psd3) > 1000, psd3)
+psd4
+```
+
+Otra forma de filtrar taxa de baja prevalencia es estableciendo un umbral y luego visulizar el efecto de manera grafica.
+
+```{r}
+# Seleccionamos las taxa de interés
+prevdf1 <- subset(prevdf, Phylum %in% get_taxa_unique(psd4, "Phylum"))
+ggplot(prevdf1, aes(TotalAbundance, Prevalence / nsamples(psd),color=Phylum)) +
+# Agregamos una línea para nuestro umbral
+geom_hline(yintercept = 0.05, alpha = 0.5, linetype = 2) +  geom_point(size = 2, alpha = 0.7) +
+  scale_x_log10() +  xlab("Total Abundance") + ylab("Prevalence [Frac. Samples]") +
+  facet_wrap(~Phylum) + theme(legend.position="none")
+```
+
+```{r}
+# Definimos el umbral de prevalencia a un 5%
+prevalenceThreshold <- 0.05 * nsamples(psd4)
+# Ejecutamos un filtro de prevalencia, usando la función `prune_taxa()`
+keepTaxa <- rownames(prevdf1)[(prevdf1$Prevalence >= prevalenceThreshold)]
+psd5 <- prune_taxa(keepTaxa, psd4)
+```
+
+**DADA2** usa como nombre de las taxa la secuencia o ASV asociada a un taxon determinado. Esto es conveniente cuando nos interesa la secuencia en nuestros análisis, sin embargo en este práctico solamente vamos a trabajar a nivel de comunidad.
+Por esto, vamos a reemplazar esos nombres con códigos correlativos, lo cual va a hacer las visualizaciones posteriores más entendibles.
+```{r}
+# Reemplazamos las secuencias por un nombre genérico
+taxa_names(psd5) <- paste0("ASV", seq(ntaxa(psd5)))
+```
+
+## Distribución
+
+Con nuestro objeto phyloseq ya filtrado y listo para usar, podemos gráficar la distribución de read counts por número de muestra de forma de tener una idea sobre la distribución de éstas.
+
+```{r}
+sample_sum_df <- data.frame(sum = sample_sums(psd5))
+
+ggplot(sample_sum_df, aes(x = sum)) + 
+  geom_histogram(color = "black", fill = "grey", binwidth = 2500) +
+  ggtitle("Distribution of sample sequencing depth") + 
+  xlab("Read counts") +
+  theme(axis.title.y = element_blank()) 
+```
+
+Finalmente, calculamos curvas de rarefacción para cada muestra, de manera tal que podamos determinar si la profundidad de secuenciación fue sufuciente o si tal vez necesitemos secuenciar más. En otras palabras, este análisis nos permitiría averiguar si al secuenciar más observaríamos más OTUs o ASVs.
+
+```{r}
+# Primero cargamos algunos scripts de manera remota
+scripts <- c("graphical_methods.R",
+             "tree_methods.R",
+             "plot_merged_trees.R",
+             "specificity_methods.R",
+             "ternary_plot.R",
+             "richness.R",
+             "edgePCA.R",
+             "copy_number_correction.R",
+             "import_frogs.R",
+             "prevalence.R",
+             "compute_niche.R")
+urls <- paste0("https://raw.githubusercontent.com/mahendra-mariadassou/phyloseq-extended/master/R/", scripts)
+
+for (url in urls) {
+  source(url)
+}
+```
+
+Objeto
+
+```{r}
+p <- ggrare(psd5, step = 100, label = "SITE_ID", plot = TRUE, parallel = FALSE, se = TRUE, color = "SITE_ID")
+```
+
+Gráfica
+
+```{r}
+q <- p + theme_classic2()+
+  scale_fill_brewer(palette = "Set1")+
+  scale_color_brewer(palette = "Set1")
+q
+pdf("Resultados/PlotDistribution.pdf", width=10, height=7)
+q
+dev.off()
+svg("Resultados/PlotDistribution.svg", width=10, height=7)
+q
+dev.off()
+pdf("Resultados/PlotDistribution1.pdf", width=10, height=7)
+q + facet_wrap("SITE_ID")
+dev.off()
+svg("Resultados/PlotDistribution1.svg", width=10, height=7)
+q + facet_wrap("SITE_ID")
+dev.off()
+```
+
+## Estructura y manipulación de un objeto phyloseq
+
+Muchas veces queremos analizar un sub conjunto de las muestras en nuestro objeto phyloseq, o bien, queremos seleccionar ciertos grupos taxonómicos para análisis posteriores. Phyloseq nos permite hacer todo tipo de filtros para llevar esto a cabo. Veamos dónde se almacena la información en phyloseq.
+
+```{r}
+# Número de taxas
+ntaxa(psd5)
+# Número de muestras
+nsamples(psd5)
+# Nombre de las muestras
+sample_names(psd5)
+# Niveles taxonómicos 
+rank_names(psd5)
+# Nombre de las variables de los metadatos
+sample_variables(psd5)
+```
+
+La tabla de cuentas relaciona el nombre de las taxa con las muestras y con el número de lecturas mapeadas en contra de ellas. Acá el número de lecturas es directamente proporcional al número de veces que se observa un taxon.
+El otro componente importante es la tabla de taxonomía.
+
+```{r}
+# Tabla de cuentas
+otu_table(psd5)[1:5, 1:5]
+```
+
+La tabla de taxonomía relaciona el nombre de las taxa con el linaje taxonómico de éstas, por ejemplo, vincula una variante de secuencia, o ASV, con los rangos taxonómicos desde Reino hasta Género o Especie dependiendo del nivel de resolución del análisis.
+
+```{r}
+# Tabla de taxonomía
+tax_table(psd5)[1:5, 1:4]
+```
+
+Finalmente, tenemos el árbol filogenético, que es opcional en phyloseq, que nos muestra las relaciones evolutivas entre las taxa de todas las muestras. Es opcional porque normalmente cuando hacemos shotgun metagenomics no contamos con un marcador universal y por lo tanto no hay filogenia. Podemos graficar simplemente la filogenia con la función plot_tree.
+
+```{r}
+# Esta es la filogenia asociada a las taxa en nuestro objeto phyloseq
+plot_tree(psd5, method = "treeonly", ladderize = "left")
+
+phy_tree(psd5)
+taxa_names(psd5)[1:10]
+
+# Probamos quedandonos solo los primeros 10 taxa con mayor presencia 
+myTaxa <- names(sort(taxa_sums(psd5), decreasing = TRUE)[1:10])
+ex1 <- prune_taxa(myTaxa, psd5)
+plot(phy_tree(ex1), show.node.label = TRUE)
+```
+
+Podemos hacer un árbol a nivel de *Phylum*
+
+```{r}
+tree <- plot_tree(psd5, color="Phylum", base.spacing = 0.03) +
+  facet_wrap("SITE_ID")+
+  theme_classic()+ 
+  labs(x="Sample", y="OTUs",
+       title="Phylogenetic tree of the phylum")+
+  theme(legend.position = "right", 
+        legend.text = element_text(size=12, face="bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.text = element_text(color = "black", size = 12, face = "bold"),
+        axis.title = element_text(color = "black", size = 12, face = "bold"),
+        plot.title = element_text(hjust = 0.5, size=14, face="bold"))
+tree
+pdf("Resultados/PlotTree.pdf", width=15, height=7)
+tree
+dev.off()
+svg("Resultados/PlotTree.svg", width=15, height=7)
+tree
+dev.off()
+```
+
+Ahora, el objeto phyloseq se ha vuelto un estándar en la industria ya que otros paquetes ahora usan esta estructura de datos para sus propias funciones. Uno de esos paquetes es *microbiome* y *ampvis*. Podemos fácilmente obtener un resumen global de nuestro objeto phyloseq usando la función summarize_phyloseq.
+
+```{r}
+summarize_phyloseq(psd5)
+```
+
+Este comando nos muestra el mínimo y máximo de reads, número total y promedio de reads, etc. También muestra los encabezados de las columans en la tabla de metadata. Veamos ahora una tabla que mezcla metadata, taxonomía y abundancia del taxon más abundante de cada muestra.
+
+```{r}
+df <- psmelt(psd5)
+df
+```
+
+También es importante tener una visión de cómo se distribuyen las muestras de acuerdo a la metadata. En este ejemplo, graficamos la frecuencia:
+
+```{r}
+res <- plot_frequencies(sample_data(psd5), "SITE_ID", "P_OLSEN")
+res
+```
+
+Ahora veamos cómo podemos filtrar y hacer subsetting de un objeto phyloseq. Esto lo hacemos con tres grupos de funciones, por ejemplo, `filter`, `subset`, y `prune`. 
++ Filtrar se refiere a filtrar según alguna regla lógica. Ya lo hicimos en la parte de control de calidad cuando llamamos la función `filter_taxa(psd1, function(x) mean(x) > 1e-5, TRUE)`. Acá le pedíamos a la función `filter_taxa` sobre el objeto psd5, calculara la media de cuentas de lecturas para cada taxa y si este resultado era menor que 1e-5, lo eliminara. Ahora filtramos según abundancia.
+Primero transformamos en abundancia relativa y luego filtramos.
+
+```{r}
+# Transformamos las cuentas en porcentaje
+psd5r <- transform_sample_counts(psd5, function(x) x / sum(x) * 100 )
+# Filtramos las taxa con una abundancia inferior al 1%
+psd5r.filtrado <- filter_taxa(psd5r, function(x) sum(x) > 1, TRUE)
+```
+
+¿Cuántas taxa permanecen en nuestro objeto phyloseq? Con una operación tan simple como la que acabamos de aplicar, nos damos cuenta que la mayoría de las taxa presentes en nuestras están en muy baja abundancia. Ahora imaginemos la situación donde queremos filtrar nuestro objeto pero en función de un taxon en específico.
+
+```{r}
+# Ahora filtramos de acuerdo a Acidobacteriota
+subset_taxa(psd5r.filtrado, Phylum == "Acidobacteriota") -> psd5r.filtrado.Acidobacteriota
+# También podríamos todo lo que NO es Acidobacteriota
+subset_taxa(psd5r.filtrado, Phylum != "Acidobacteriota") -> psd5r.filtrado.NoAcidobacteriota
+```
+
+Otra manera de filtrar un objeto phyloseq es en base a algún atributo presente en `sample_data`. Por ejemplo, con estos datos uno podría querer estudiar el microbioma de área por separado. Para esto crearíamos tres objetos phyloseq a partir de psd5.
+
+```{r}
+psd5.Ag1 <- subset_samples(psd5, SITE_ID == "Ag1")
+psd5.Ag2 <- subset_samples(psd5, SITE_ID == "Ag2")
+psd5.Ag3 <- subset_samples(psd5, SITE_ID == "Ag3")
+```
+
+Alternativamente, podríamos decidir estudiar solo dos de las 3 áreas
+```{r}
+psd5.Ag1_Ag2 <- subset_samples(subset_samples(psd5, SITE_ID != "Ag3"))
+```
+### Dendogramas
+
+A continuación haremos los dendogramas de todas los *phylum* y *género*
+El comando `prune_samples()` también es muy usado ya que nos permite usar un vector con las muestras que queremos mantener (similar a `subset_samples`) o un vector lógico donde las muestras que queremos mantener son verdaderas.
+
+```{r}
+Phy <- tax_glom(psd5, taxrank = 'Phylum')
+Phy <- psmelt(Phy)
+Phy <- Phy[sort(Phy$Abundance, decreasing = F)]
+  
+  
+  
+psd5_phylum <- tax_glom(psd5, taxrank = 'Phylum')
+Phy <- unique(sort(psd5@tax_table@.Data[,"Phylum"]))
+percentages$Phylum[percentages$Abundance < 1.0] <- "Phyla < 1.0% abund."
+```
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+```{r}
+# Primero seleccionamos solo el Phylum Acidobacteriota
+subset_taxa(psd5, Phylum=="Acidobacteriota") -> psd5.Acidobacteriota
+# Luego nos quedamos con las muestras que solo cumplen con la condición, i,e, que poseen una abundancia de Acidobacteriota de más de 5 reads
+prune_samples(sample_sums(psd5.Acidobacteriota)>=5, psd5.Acidobacteriota) -> psd5.Acidobacteriota
+# Y finalmente visualizamos los resultados mapeados en el árbol filogenético
+tree.acido <- plot_tree(psd5.Acidobacteriota, color="Genus", size = "abundance", base.spacing = 0.03) +
+  facet_wrap("SITE_ID")+ 
+  theme_classic()+ 
+  labs(x="Sample", y="OTUs",
+       title="Phylogenetic tree of the phylum Acidobacteriota")+
+  theme(legend.position = "right", 
+        legend.text = element_text(size=12, face="bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.text = element_text(color = "black", size = 12, face = "bold"),
+        axis.title = element_text(color = "black", size = 12, face = "bold"),
+        plot.title = element_text(hjust = 0.5, size=14, face="bold"))
+tree.acido
+pdf("Resultados/PlotTreeAcido.pdf", width=15, height=7)
+tree.acido
+dev.off()
+svg("Resultados/PlotTreeAcido.svg", width=15, height=7)
+tree.acido
+dev.off()
+```
 
 
 
