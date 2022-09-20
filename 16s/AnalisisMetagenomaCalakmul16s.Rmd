@@ -210,8 +210,9 @@ getwd()
 # "." significa el directorio actual. 
 workingDir <-  "."
 setwd(workingDir)
-# Creamos directorio de Resultados
+# Creamos directorio de Resultados y otras capertas
 dir.create("Resultados/")
+dir.create("Resultados/Dendogramas/")
 # Asignamos la carpeta donde están las lecturas crudas
 miseq_path <- "RawData"
 list.files(miseq_path)
@@ -676,7 +677,7 @@ plot(phy_tree(ex1), show.node.label = TRUE)
 Podemos hacer un árbol a nivel de *Phylum*
 
 ```{r}
-tree <- plot_tree(psd5, color="Phylum", base.spacing = 0.03) +
+Dendro <- plot_tree(psd5, color="Phylum", base.spacing = 0.03) +
   facet_wrap("SITE_ID")+
   theme_classic()+ 
   labs(x="Sample", y="OTUs",
@@ -689,12 +690,12 @@ tree <- plot_tree(psd5, color="Phylum", base.spacing = 0.03) +
         axis.text = element_text(color = "black", size = 12, face = "bold"),
         axis.title = element_text(color = "black", size = 12, face = "bold"),
         plot.title = element_text(hjust = 0.5, size=14, face="bold"))
-tree
-pdf("Resultados/PlotTree.pdf", width=15, height=7)
-tree
+print(dendro)
+pdf("Resultados/Dendogramas/PlotTreePhylum.pdf", width=15, height=7)
+print(dendro)
 dev.off()
-svg("Resultados/PlotTree.svg", width=15, height=7)
-tree
+svg("Resultados/Dendogramas/PlotTreePhylum.svg", width=15, height=7)
+print(dendro)
 dev.off()
 ```
 
@@ -750,21 +751,66 @@ Alternativamente, podríamos decidir estudiar solo dos de las 3 áreas
 ```{r}
 psd5.Ag1_Ag2 <- subset_samples(subset_samples(psd5, SITE_ID != "Ag3"))
 ```
+
+## Datos absolutos y relativos
+
+Generamos una tabla de datos absolutos y relativos, para posteriores análisis.
+
+```{r}
+Relativos <- transform_sample_counts(psd5, function(x) x*100 / sum(x))
+# Valores relativos
+Glom_Rel <- tax_glom(physeq = Relativos, taxrank = 'Phylum')
+# psmelt permite generar un data.frame a partir de un objeto de phyloseq
+Relativos <- psmelt(Glom_Rel)
+# Valores absolutos
+Glom_Abs <- tax_glom(physeq = psd5, taxrank = "Phylum")
+Absolutos <- psmelt(Glom_Abs)
+```
+
 ### Dendogramas
 
 A continuación haremos los dendogramas de todas los *phylum* y *género*
 El comando `prune_samples()` también es muy usado ya que nos permite usar un vector con las muestras que queremos mantener (similar a `subset_samples`) o un vector lógico donde las muestras que queremos mantener son verdaderas.
 
 ```{r}
-Phy <- tax_glom(psd5, taxrank = 'Phylum')
-Phy <- psmelt(Phy)
-Phy <- Phy[sort(Phy$Abundance, decreasing = F)]
-  
-  
-  
-psd5_phylum <- tax_glom(psd5, taxrank = 'Phylum')
-Phy <- unique(sort(psd5@tax_table@.Data[,"Phylum"]))
-percentages$Phylum[percentages$Abundance < 1.0] <- "Phyla < 1.0% abund."
+OnePercentage <- unique(Relativos$Phylum[Relativos$Abundance > 1.0])
+OnePercentage
+```
+
+Ciclo para hacer todos los dendogramas con mayor al 1 % en abundancia relativa
+
+```{r}
+for (i in OnePercentage){
+  # Prueba 
+  # i <- "Actinobacteriota"
+  # Primero seleccionamos solo el Phylum
+  Sub <- subset_taxa(psd5, Phylum == i)
+  # Filtramos por abundancia mayor a 5 reads
+  Sub <- prune_samples(sample_sums(Sub) >= 5, Sub) 
+  # Vemos resultados en un Dendograma
+  tryCatch({
+  dendro <- plot_tree(Sub, color = "Genus", size = "abundance", base.spacing = 0.03) +
+    facet_wrap("SITE_ID") +
+    theme_classic() +
+    labs(x = "Sample", y = "OTUs",
+         title = paste0("Phylogenetic tree of the Phylum ", i)) +
+    theme(legend.position = "right", 
+        legend.text = element_text(size=12, face="bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.text = element_text(color = "black", size = 12, face = "bold"),
+        axis.title = element_text(color = "black", size = 12, face = "bold"),
+        plot.title = element_text(hjust = 0.5, size=14, face="bold"))
+  }, error=function(e){cat("ERROR :",conditionMessage(e), "\n")}) 
+  dendro
+  pdf(paste0("Resultados/Dendogramas/PlotTree", i, ".pdf"), width = 20, height = 10)
+  print(dendro)
+  dev.off()
+  svg(paste0("Resultados/Dendogramas/PlotTree", i, ".svg"), width = 20, height = 10)
+  print(dendro)
+  dev.off()
+}
 ```
 
 
@@ -788,7 +834,7 @@ tree.acido <- plot_tree(psd5.Acidobacteriota, color="Genus", size = "abundance",
         axis.title = element_text(color = "black", size = 12, face = "bold"),
         plot.title = element_text(hjust = 0.5, size=14, face="bold"))
 tree.acido
-pdf("Resultados/PlotTreeAcido.pdf", width=15, height=7)
+pdf("Resultados/PlotTreeAcido.pdf", width=, height=7)
 tree.acido
 dev.off()
 svg("Resultados/PlotTreeAcido.svg", width=15, height=7)
@@ -796,7 +842,36 @@ tree.acido
 dev.off()
 ```
 
+Para finalizar esta sección, un par de funciones muy útiles en phyloseq son `tax_glom()` y `tip_glom()`. Ambas funciones tratan de agrupar o aglomerar un objeto de acuerdo a alguna propiedad, de esta manera simplificándolo. Por ejemplo, es muy probable que uno tenga varias ASVs del mismo género ya que si bien a nivel de secuencia son diferentes, estas corresponden al mismo género.
+Para hacer visualizaciones y otros análisis puede ser conveniente colapsar o aglomerar estas secuencias del mismo género u otro rango taxonómico. Al mismo tiempo, `tip_glom()` realiza una función similar pero basándose en una “altura” arbitraria en el árbol filogenético.
 
+```{r}
+# Primero aglomeramos por género
+psd5.genus <- tax_glom(psd5, "Genus", NArm = FALSE)
+# Luego por altura en el árbol filogenético
+h1 <-  0.2
+psd5.tip <- tip_glom(psd5, h = h1)
+# Grafiquemos una comparación para visualizar las diferencias
+multiPlotTitleTextSize = 15
+p2tree <- plot_tree(psd5, method = "treeonly",
+                   ladderize = "left",
+                   title = "Sin aglomeración") +
+  theme(plot.title = element_text(size = multiPlotTitleTextSize))
+p3tree <- plot_tree(psd5.genus, method = "treeonly",
+                   ladderize = "left", title = "A nivel de género") +
+  theme(plot.title = element_text(size = multiPlotTitleTextSize))
+p4tree <- plot_tree(psd5.tip, method = "treeonly",
+                   ladderize = "left", title = "Por altura") +
+  theme(plot.title = element_text(size = multiPlotTitleTextSize))
 
+# Graficamos los árboles juntos
+grid.arrange(nrow = 1, p2tree, p3tree, p4tree)
+```
 
+## Ensamble y manipulación de objetos de **Phyloseq**
 
+```{r}
+psd5
+sample_sums(x = psd5)
+summary(psd5@otu_table@.Data)
+```
