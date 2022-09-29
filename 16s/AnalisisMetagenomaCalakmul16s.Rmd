@@ -65,14 +65,18 @@ knitr::opts_chunk$set(echo = TRUE)
 # Primero deben asegurarse de tener instalados todos los paquetes
 
 ## Repositorio CRAN
-cran_packages <- c("bookdown", "knitr", "tidyverse", "plyr", "grid", "gridExtra", "kableExtra", "xtable", "ggpubr")
+cran_packages <- c("bookdown", "knitr", "tidyverse", "plyr", "grid",
+                   "gridExtra", "kableExtra", "xtable", "ggpubr")
 ## Repositorio Bioconductor
-bioc_packages <- c("phyloseq", "dada2", "DECIPHER", "phangorn", "ggpubr", "BiocManager","DESeq2", "microbiome", "philr")
+bioc_packages <- c("phyloseq", "dada2", "DECIPHER", "phangorn", "ggpubr",
+                   "BiocManager","DESeq2", "microbiome", "philr")
 ## Repositorio GitHub
-git_source <- c("twbattaglia/btools", "gmteunisse/Fantaxtic", "MadsAlbertsen/ampvis2", "opisthokonta/tsnemicrobiota")
+git_source <- c("twbattaglia/btools", "gmteunisse/Fantaxtic",
+                "MadsAlbertsen/ampvis2", "opisthokonta/tsnemicrobiota")
 # fuente/nombre del paquete
-git_packages <- c("btools", "fantaxtic", "ampvis2", "tsnemicrobiota") #Nombre del paquete
-sapply(c(cran_packages, bioc_packages, git_packages), require, character.only = TRUE)
+git_packages <- c("btools", "fantaxtic", "ampvis2", "tsnemicrobiota") 
+sapply(c(cran_packages, bioc_packages, git_packages), 
+       require, character.only = TRUE)
 library("phyloseq")
 library("ggplot2")
 library("readr")
@@ -139,13 +143,16 @@ Definimos los paquetes que se utilizarán
 
 ```{r}
 ## Repositorio CRAN
-cran_packages <- c("bookdown", "knitr", "tidyverse", "plyr", "grid", "gridExtra", "kableExtra", "xtable", "ggpubr")
+cran_packages <- c("bookdown", "knitr", "tidyverse", "plyr", "grid",
+                   "gridExtra", "kableExtra", "xtable", "ggpubr")
 ## Repositorio Bioconductor
-bioc_packages <- c("phyloseq", "dada2", "DECIPHER", "phangorn", "ggpubr", "BiocManager","DESeq2", "microbiome", "philr")
+bioc_packages <- c("phyloseq", "dada2", "DECIPHER", "phangorn", "ggpubr",
+                   "BiocManager","DESeq2", "microbiome", "philr")
 ## Repositorio GitHub
-git_source <- c("twbattaglia/btools", "gmteunisse/fantaxtic", "MadsAlbertsen/ampvis2", "opisthokonta/tsnemicrobiota")
+git_source <- c("twbattaglia/btools", "gmteunisse/fantaxtic",
+                "MadsAlbertsen/ampvis2", "opisthokonta/tsnemicrobiota")
 # fuente/nombre del paquete
-git_packages <- c("btools", "fantaxtic", "ampvis2", "tsnemicrobiota") #Nombre del paquete
+git_packages <- c("btools", "fantaxtic", "ampvis2", "tsnemicrobiota")
 ```
 
 Instalamos los paquetes, para ello es necesario que descomentes las siguientes líneas.
@@ -178,8 +185,9 @@ Instalamos los paquetes, para ello es necesario que descomentes las siguientes l
 
 Cargamos los paquetes
 
-```{r}
-sapply(c(cran_packages, bioc_packages, git_packages), require, character.only = TRUE)
+```{r, message = FALSE, warning = FALSE}
+sapply(c(cran_packages, bioc_packages, git_packages), require, 
+       character.only = TRUE)
 library("phyloseq")
 library("ggplot2")
 library("readr")
@@ -294,7 +302,7 @@ names(derepRs) <- sampleNames
 
 Una vez con las muestras de-replicadas procedemos a generar un modelo de errores. Para mayor detalle sobre este crucial paso revisen el artículo original [aquí](https://www.nature.com/articles/nmeth.3869).
 
-```{r}
+```{r, include = TRUE, echo = TRUE, fig.pos = 'H', fig.dim = c(12,8), fig.align = "center", message=FALSE, fig.cap = 'Tasas de error para cada transición posible.'}
 errF <- learnErrors(filtFs, multithread=TRUE)
 errR <- learnErrors(filtRs, multithread=TRUE)
 
@@ -353,7 +361,8 @@ La tabla de secuencias es una matriz con filas correspondientes a (y nombradas p
 El método `dada` corrige errores de sustitución e indel (insersión / deleción), pero quedan quimeras (producto de la amplificación por PCR). Afortunadamente, la precisión de las variantes de secuencia después de eliminar el ruido hace que identificar ASV quiméricos sea más simple que cuando se trata de OTU difusas. Las secuencias quiméricas se identifican si pueden reconstruirse exactamente combinando un segmento izquierdo y un segmento derecho de dos secuencias "primarias" más abundantes. 
 
 ```{r}
-seqtabNoC <- removeBimeraDenovo(seqtabAll, method="consensus", multithread=TRUE, verbose=TRUE)
+seqtabNoC <- removeBimeraDenovo(seqtabAll, method = "consensus",
+                                multithread = TRUE, verbose = TRUE)
 dim(seqtabNoC)
 sum(seqtabNoC)/sum(seqtabAll)
 ```
@@ -393,7 +402,8 @@ El paquete **DADA2** también implementa un método para realizar **asignaciones
 
 ```{r}
 # En el caso de querer agregar el rango taxonómico de especies, simplemente usamos una base de datos extra, la cual contiene esta información. 
-taxTabExtra <- addSpecies(taxTab, "Silva/silva_species_assignment_v138.fa", verbose=TRUE)
+taxTabExtra <- addSpecies(taxTab, "Silva/silva_species_assignment_v138.fa",
+                          verbose = TRUE)
 unname(head(taxTab)) -> tabla
 colnames(tabla) <- c("Kingdom", "Phylum", "Order", "Class", "Family", "Genus")
 head(tabla)
@@ -461,12 +471,13 @@ all(rownames(seqtabAll) %in% samdf$run)
 **Phyloseq** es un paquete de Bioconductor para la manipulación y análisis de datos metagenómicos generados por metodologías de secuenciación de alto rendimiento. **Phyloseq** es una herramienta para *importar*, *guardar*, *analizar* y *visualizar* éste tipo de datos después de haber sido procesados inicialmente, por ejemplo, *ensamblaje de novo*, *ASVs* u *OTUs* (clustered), incluyendo otros importantes datos asociados (si están disponibles): *tabla de observaciones asociadas a cada muestra* (por jemplo: *especie*, *localización geográfica*, *temperatura*, etc.), conocida como sample data o *metadata*, *árbol filogenético*, e *identificación taxonómica* de cada OTU. La estructura del paquete **Phyloseq** consiste en una serie de funciones de acceso y de proceso de objetos phyloseq. Estos objetos están compuestos de cuatro componentes que almacenan las cuentas de reads, la metadata, la taxonomía y el árbol filogenético. El paquete también provee una serie de herramientas para importar datos de otros programas.
 
 Con estos elementos procedemos a generar un objeto phyloseq:
-```{r}
+```{r, message = FALSE, warning = FALSE}
 ps <- phyloseq(otu_table(seqtabNoC, taxa_are_rows=FALSE), 
                sample_data(samdf), 
                tax_table(taxTab),
                phy_tree(fitGTR$tree))
-ps <- prune_samples(sample_names(ps) != "Mock", ps) # Remover potenciales muestras sintéticas
+# Remover potenciales muestras sintéticas
+ps <- prune_samples(sample_names(ps) != "Mock", ps) 
 ps
 ```
 
@@ -480,7 +491,7 @@ class(ps)
 
 Es más conveniente usar nombres cortos para nuestros ASV (por ejemplo, ASV21) en lugar de la secuencia de ADN completa cuando se trabaja con algunas de las tablas y visualizaciones de phyloseq, pero queremos mantener las secuencias de ADN completas para otros fines, como fusionar con otros conjuntos de datos o la indexación en bases de datos de referencia como Earth Microbiome Project. Por esa razón, almacenaremos las secuencias de ADN de nuestros ASV en la ranura refseq del objeto phyloseq y luego cambiaremos el nombre de nuestros taxones a una cadena corta. De esa forma, los nombres breves de los nuevos taxones aparecerán en tablas y gráficos, y aún podemos recuperar las secuencias de ADN correspondientes a cada ASV según sea necesario con refseq(ps). 
 
-```{r}
+```{r, message = FALSE, warning = FALSE}
 dna <- Biostrings::DNAStringSet(taxa_names(ps))
 names(dna) <- taxa_names(ps)
 ps <- merge_phyloseq(ps, dna)
@@ -511,7 +522,7 @@ kable(dfprev)
 
 Al examinar la tabla, es evidente que algunos Phylum aunque presentes, están muy poco representados. La columna 1 representa la media de read counts para ese Phylum, mientras que la columna 2 representa la suma. Por ejemplo, grupos como *Calditrichota* y *Dadabacteria* están representados solamente por 1 read. Es muy riesgoso mantener estos grupos taxonómicos en el análisis ya que pueden corresponder a falsos positivos. Para filtrarlos, generamos un vector con todas las taxa que queremos filtrar.
 
-```{r}
+```{r, message = FALSE, warning = FALSE}
 # Definimos taxa a filtrar
 filterPhyla <- c("Calditrichota", "Dadabacteria", NA)
 # Procedemos a filtrar
@@ -531,7 +542,7 @@ psd1 <- subset_taxa(psd1, !Genus %in% filterPhyla2)
 
 Además del filtrado que acabamos de realizar, existen otros tipos de filtrado que tienen que ver con la media de cuentas por lectura por taxa, con la distribución de éstas, y con filtrar muestras bajo un número lecturas.
 
-```{r}
+```{r, message = FALSE, warning = FALSE}
 # Filtramos taxa de acuerdo a un umbral de número medio de _read counts_, en este caso 1e-5
 psd2 <- filter_taxa(psd1, function(x) mean(x) > 1e-5, TRUE)
 # También podemos remover taxa que no se observe más de X veces en al menos 10% de las muestras
@@ -543,7 +554,7 @@ psd4
 
 Otra forma de filtrar taxa de baja prevalencia es estableciendo un umbral y luego visulizar el efecto de manera grafica.
 
-```{r}
+```{r, include = TRUE, echo = TRUE, fig.pos = 'H', fig.dim = c(12,8), fig.align = "center", message=FALSE, fig.cap = 'Fracción prevalente a nivel de Phylum.'}
 # Seleccionamos las taxa de interés
 prevdf1 <- subset(prevdf, Phylum %in% get_taxa_unique(psd4, "Phylum"))
 ggplot(prevdf1, aes(TotalAbundance, Prevalence / nsamples(psd),color=Phylum)) +
@@ -553,7 +564,7 @@ geom_hline(yintercept = 0.05, alpha = 0.5, linetype = 2) +  geom_point(size = 2,
   facet_wrap(~Phylum) + theme(legend.position="none")
 ```
 
-```{r}
+```{r, message = FALSE, warning = FALSE}
 # Definimos el umbral de prevalencia a un 5%
 prevalenceThreshold <- 0.05 * nsamples(psd4)
 # Ejecutamos un filtro de prevalencia, usando la función `prune_taxa()`
@@ -563,7 +574,7 @@ psd5 <- prune_taxa(keepTaxa, psd4)
 
 **DADA2** usa como nombre de las taxa la secuencia o ASV asociada a un taxon determinado. Esto es conveniente cuando nos interesa la secuencia en nuestros análisis, sin embargo en este práctico solamente vamos a trabajar a nivel de comunidad.
 Por esto, vamos a reemplazar esos nombres con códigos correlativos, lo cual va a hacer las visualizaciones posteriores más entendibles.
-```{r}
+```{r, message = FALSE, warning = FALSE}
 # Reemplazamos las secuencias por un nombre genérico
 taxa_names(psd5) <- paste0("ASV", seq(ntaxa(psd5)))
 ```
@@ -572,7 +583,7 @@ taxa_names(psd5) <- paste0("ASV", seq(ntaxa(psd5)))
 
 Con nuestro objeto phyloseq ya filtrado y listo para usar, podemos gráficar la distribución de read counts por número de muestra de forma de tener una idea sobre la distribución de éstas.
 
-```{r}
+```{r, include = TRUE, echo = TRUE, fig.pos = 'H', fig.dim = c(12,8), fig.align = "center", message=FALSE, fig.cap = 'Distribución de la profundidad de las muestras secuenciadas.'}
 sample_sum_df <- data.frame(sum = sample_sums(psd5))
 
 ggplot(sample_sum_df, aes(x = sum)) + 
@@ -613,7 +624,7 @@ p <- ggrare(psd5, step = 100, label = "SITE_ID", plot = TRUE,
 
 Gráfica
 
-```{r}
+```{r, include = TRUE, echo = TRUE, fig.pos = 'H', fig.dim = c(12,8), fig.align = "center", message=FALSE, fig.cap = 'Riquezas y distribución de especies por cada una de las muestras.'}
 q <- p + theme_classic2()+
   scale_fill_brewer(palette = "Set1")+
   scale_color_brewer(palette = "Set1")
@@ -673,7 +684,7 @@ tax_table(psd5)[1:5, 1:4]
 
 Finalmente, tenemos el árbol filogenético, que es opcional en phyloseq, que nos muestra las relaciones evolutivas entre las taxa de todas las muestras. Es opcional porque normalmente cuando hacemos shotgun metagenomics no contamos con un marcador universal y por lo tanto no hay filogenia. Podemos graficar simplemente la filogenia con la función plot_tree.
 
-```{r}
+```{r, include = TRUE, echo = TRUE, fig.pos = 'H', fig.dim = c(12,8), fig.align = "center", message=FALSE, fig.cap = 'Filograma de todos los OTUs y de los 10 principales'}
 # Esta es la filogenia asociada a las taxa en nuestro objeto phyloseq
 plot_tree(psd5, method = "treeonly", ladderize = "left")
 
@@ -688,7 +699,7 @@ plot(phy_tree(ex1), show.node.label = TRUE)
 
 Podemos hacer un árbol a nivel de *Phylum*
 
-```{r}
+```{r, include = TRUE, echo = TRUE, fig.pos = 'H', fig.dim = c(12,8), fig.align = "center", message=FALSE, fig.cap = 'Dendograma a nivel taxonómico de *Phylum*'}
 Dendro <- plot_tree(psd5, color="Phylum", base.spacing = 0.03) +
   facet_wrap("SITE_ID")+
   theme_classic()+ 
@@ -702,18 +713,18 @@ Dendro <- plot_tree(psd5, color="Phylum", base.spacing = 0.03) +
         axis.text = element_text(color = "black", size = 12, face = "bold"),
         axis.title = element_text(color = "black", size = 12, face = "bold"),
         plot.title = element_text(hjust = 0.5, size=14, face="bold"))
-print(dendro)
+print(Dendro)
 pdf("Resultados/Dendogramas/PlotTreePhylum.pdf", width=15, height=7)
-print(dendro)
+print(Dendro)
 dev.off()
 svg("Resultados/Dendogramas/PlotTreePhylum.svg", width=15, height=7)
-print(dendro)
+print(Dendro)
 dev.off()
 ```
 
 Ahora, el objeto phyloseq se ha vuelto un estándar en la industria ya que otros paquetes ahora usan esta estructura de datos para sus propias funciones. Uno de esos paquetes es *microbiome* y *ampvis*. Podemos fácilmente obtener un resumen global de nuestro objeto phyloseq usando la función summarize_phyloseq.
 
-```{r}
+```{r, message = FALSE, warning = FALSE}
 summarize_phyloseq(psd5)
 ```
 
@@ -724,18 +735,11 @@ df <- psmelt(psd5)
 df
 ```
 
-También es importante tener una visión de cómo se distribuyen las muestras de acuerdo a la metadata. En este ejemplo, graficamos la frecuencia:
-
-```{r}
-res <- plot_frequencies(sample_data(psd5), "SITE_ID", "P_OLSEN")
-res
-```
-
 Ahora veamos cómo podemos filtrar y hacer subsetting de un objeto phyloseq. Esto lo hacemos con tres grupos de funciones, por ejemplo, `filter`, `subset`, y `prune`. 
 + Filtrar se refiere a filtrar según alguna regla lógica. Ya lo hicimos en la parte de control de calidad cuando llamamos la función `filter_taxa(psd1, function(x) mean(x) > 1e-5, TRUE)`. Acá le pedíamos a la función `filter_taxa` sobre el objeto psd5, calculara la media de cuentas de lecturas para cada taxa y si este resultado era menor que 1e-5, lo eliminara. Ahora filtramos según abundancia.
 Primero transformamos en abundancia relativa y luego filtramos.
 
-```{r}
+```{r, message = FALSE, warning = FALSE}
 # Transformamos las cuentas en porcentaje
 psd5r <- transform_sample_counts(psd5, function(x) x / sum(x) * 100 )
 # Filtramos las taxa con una abundancia inferior al 1%
@@ -744,7 +748,7 @@ psd5r.filtrado <- filter_taxa(psd5r, function(x) sum(x) > 1, TRUE)
 
 ¿Cuántas taxa permanecen en nuestro objeto phyloseq? Con una operación tan simple como la que acabamos de aplicar, nos damos cuenta que la mayoría de las taxa presentes en nuestras están en muy baja abundancia. Ahora imaginemos la situación donde queremos filtrar nuestro objeto pero en función de un taxon en específico.
 
-```{r}
+```{r, message = FALSE, warning = FALSE}
 # Ahora filtramos de acuerdo a Acidobacteriota
 subset_taxa(psd5r.filtrado, Phylum == "Acidobacteriota") -> psd5r.filtrado.Acidobacteriota
 # También podríamos todo lo que NO es Acidobacteriota
@@ -753,21 +757,21 @@ subset_taxa(psd5r.filtrado, Phylum != "Acidobacteriota") -> psd5r.filtrado.NoAci
 
 Otra manera de filtrar un objeto phyloseq es en base a algún atributo presente en `sample_data`. Por ejemplo, con estos datos uno podría querer estudiar el microbioma de área por separado. Para esto crearíamos tres objetos phyloseq a partir de psd5.
 
-```{r}
+```{r, message = FALSE, warning = FALSE}
 psd5.Ag1 <- subset_samples(psd5, SITE_ID == "Ag1")
 psd5.Ag2 <- subset_samples(psd5, SITE_ID == "Ag2")
 psd5.Ag3 <- subset_samples(psd5, SITE_ID == "Ag3")
 ```
 
 Alternativamente, podríamos decidir estudiar solo dos de las 3 áreas
-```{r}
+```{r, message = FALSE, warning = FALSE}
 psd5.Ag1_Ag2 <- subset_samples(subset_samples(psd5, SITE_ID != "Ag3"))
 ```
 ## Transformación y manipulación de datos
 
 Siguimos viendo el objeto phyloseq
 
-```{r}
+```{r, message = FALSE, warning = FALSE}
 #Con esto nos dice cuántos datos vacios hay, en este caso serán todos aquellos que aparezcan como TRUE
 summary(psd5@tax_table@.Data== "") # Hay 1337 NAs
 #Actualizamos la variable psd5 indicando que se incluya todo lo diferente (!=) a vacio "", para la variable "Genus"
@@ -779,7 +783,7 @@ summary(psd5@tax_table@.Data== "") # Ya no hay ninguno
 
 Generamos una tabla de datos absolutos y relativos a nivel de "Phylum", para posteriores análisis.
 
-```{r}
+```{r, message = FALSE, warning = FALSE}
 Relativos <- transform_sample_counts(psd5, function(x) x*100 / sum(x))
 # Valores relativos
 Glom_Rel <- tax_glom(physeq = Relativos, taxrank = 'Phylum')
@@ -794,7 +798,7 @@ Absolutos <- psmelt(Glom_Abs)
 
 En eje X usamos la variable "SITE_ID", y en Y es "Abundance" y rellenamos por "Phylum"
 
-```{r}
+```{r, include = TRUE, echo = TRUE, fig.pos = 'H', fig.dim = c(12,8), fig.align = "center", message=FALSE, fig.cap = 'Abundancia absoluta y relativa a nivel de *Phylum*.'}
 Abs.plot <- ggplot(data=Absolutos, aes(x=SITE_ID, y=Abundance, fill=Phylum)) + 
   geom_bar(aes(), stat="identity", position="stack") + 
   theme_classic() +
@@ -843,7 +847,7 @@ dev.off()
 
 Otra versión pero ahora en el eje X usamos la variable "ID" y en Y es "Abundance" y rellenamos por "Phylum".
 
-```{r}
+```{r, include = TRUE, echo = TRUE, fig.pos = 'H', fig.dim = c(12,8), fig.align = "center", message=FALSE, fig.cap = 'Abundancia absoluta y relativa a nivel de *Phylum*, v2.'}
 Abs.plot1 <- ggplot(data=Absolutos, aes(x=ID, y=Abundance, fill=Phylum)) + 
   geom_bar(aes(), stat="identity", position="stack") + 
   theme_classic() +
@@ -909,7 +913,7 @@ unique(Relativos$Phylum)
 
 Volvemos a graficar usando ese filtro de "Phylum < 1.0% abund."
 
-```{r}
+```{r, include = TRUE, echo = TRUE, fig.pos = 'H', fig.dim = c(12,8), fig.align = "center", message=FALSE, fig.cap = 'Abundancia absoluta y relativa a nivel de *Phylum*. con Phylum < 1.0 % abundancia.'}
 Rel.plot2 <- ggplot(data=Relativos, aes(x=SITE_ID, y=Abundance, fill=Phylum)) + 
   geom_bar(aes(), stat="identity", position="fill") + 
   theme_classic() +
@@ -936,7 +940,9 @@ dev.off()
 svg("Resultados/Abundancias/PlotRaw-Rel2.svg", width=15, height=7)
 Abs.plot | Rel.plot2
 dev.off()
+```
 
+```{r, include = TRUE, echo = TRUE, fig.pos = 'H', fig.dim = c(12,8), fig.align = "center", message=FALSE, fig.cap = 'Abundancia absoluta y relativa a nivel de *Phylum*. con Phylum < 1.0 % abundancia v2.'}
 Rel.plot3 <- ggplot(data=Relativos, aes(x=ID, y=Abundance, fill=Phylum)) + 
   geom_bar(aes(), stat="identity", position="fill") + 
   theme_classic() +
@@ -978,7 +984,7 @@ OnePercentage
 
 Ciclo para hacer todos los dendogramas con mayor al 1 % en abundancia relativa
 
-```{r}
+```{r, include = TRUE, echo = TRUE, fig.pos = 'H', fig.dim = c(12,8), fig.align = "center", message=FALSE, fig.cap = 'Dendogramas de todos los *Phylum* presentes en mayor a 1 % de Abundancia.'}
 for (i in OnePercentage){
   # Prueba 
   # i <- "Actinobacteriota"
@@ -1002,7 +1008,7 @@ for (i in OnePercentage){
         axis.title = element_text(color = "black", size = 12, face = "bold"),
         plot.title = element_text(hjust = 0.5, size=14, face="bold"))
   }, error=function(e){cat("ERROR :",conditionMessage(e), "\n")}) 
-  dendro
+  print(dendro)
   pdf(paste0("Resultados/Dendogramas/PlotTree", i, ".pdf"), width = 20, height = 10)
   print(dendro)
   dev.off()
@@ -1015,7 +1021,7 @@ for (i in OnePercentage){
 Para finalizar esta sección, un par de funciones muy útiles en phyloseq son `tax_glom()` y `tip_glom()`. Ambas funciones tratan de agrupar o aglomerar un objeto de acuerdo a alguna propiedad, de esta manera simplificándolo. Por ejemplo, es muy probable que uno tenga varias ASVs del mismo género ya que si bien a nivel de secuencia son diferentes, estas corresponden al mismo género.
 Para hacer visualizaciones y otros análisis puede ser conveniente colapsar o aglomerar estas secuencias del mismo género u otro rango taxonómico. Al mismo tiempo, `tip_glom()` realiza una función similar pero basándose en una “altura” arbitraria en el árbol filogenético.
 
-```{r}
+```{r, include = TRUE, echo = TRUE, fig.pos = 'H', fig.dim = c(12,8), fig.align = "center", message=FALSE, fig.cap = 'Árboles filogenéticos: Sin aglomeración, A nivel de género y por altura.'}
 # Primero aglomeramos por género
 psd5.genus <- tax_glom(psd5, "Genus", NArm = FALSE)
 # Luego por altura en el árbol filogenético
@@ -1042,7 +1048,7 @@ grid.arrange(nrow = 1, p2tree, p3tree, p4tree)
 
 Graficamos con ggplot2 para ver el comportamiento de las lecturas en cada una de las muestras
 
-```{r}
+```{r, include = TRUE, echo = TRUE, fig.pos = 'H', fig.dim = c(12,8), fig.align = "center", message=FALSE, fig.cap = 'Distribución del total de lecturas en cada una de las muestras.'}
 #Generamos un data.frame con datos del merge_metagenomes
 deep <- data.frame(Samples = psd5@sam_data@.Data[[1]],
                    Reads = sample_sums(psd5))
@@ -1070,9 +1076,9 @@ plot.reads
 dev.off()
 ```
 
-Abundancias a nivel de Phylum nuevamente para los deu abundancia mayor al 1 %
+Abundancias a nivel de Phylum nuevamente para los de abundancia mayor al 1 %
 
-```{r}
+```{r, include = TRUE, echo = TRUE, fig.pos = 'H', fig.dim = c(12,8), fig.align = "center", message=FALSE, fig.cap = 'Abundancia relativa de todos los *Phylum* presentes en mayor a 1 % de Abundancia.'}
 for (i in OnePercentage){
   tryCatch({
     # Prueba 
@@ -1128,10 +1134,10 @@ for (i in OnePercentage){
 
 ## Alfa diversidad
 
-En el contexto metagenómico, medimos diversidad alfa usando una serie de medidas prestadas de ecología que nos permiten caracterizar una comunidad microbiana. phyloseq tiene una función muy útil que nos permite calcular y graficar hasta siete medidas, i .e., Observed (simplemente el número de taxa o riqueza), Chao1 (la riqueza ajustada por probabilidad de no observar especies), ACE (riqueza que toma en cuenta la abundancia relativa), Shannon (abundancia relativa de taxa), Simpson (1 - la probabilidad de que observemos aleatoriamente dos bacterias en una comunidad y que pertenezcan a diferentes especies ), Inverse Simpson ( 1 / Simpson), y Fisher (riqueza tomando en cuenta abundancia).
-En phyloseq simplemente llamamos la función plot_richness y podemos visualizar las medidas de diversidad.
+En el contexto metagenómico, medimos diversidad alfa  $\alpha$ usando una serie de medidas prestadas de ecología que nos permiten caracterizar una comunidad microbiana. phyloseq tiene una función muy útil que nos permite calcular y graficar hasta siete medidas, i .e., Observed (simplemente el número de taxa o riqueza), Chao1 (la riqueza ajustada por probabilidad de no observar especies), ACE (riqueza que toma en cuenta la abundancia relativa), Shannon (abundancia relativa de taxa), Simpson (1 - la probabilidad de que observemos aleatoriamente dos bacterias en una comunidad y que pertenezcan a diferentes especies ), Inverse Simpson ( 1 / Simpson), y Fisher (riqueza tomando en cuenta abundancia).
+En phyloseq simplemente llamamos la función plot_richness y podemos visualizar las medidas de diversidad. 
 
-```{r}
+```{r, include = TRUE, echo = TRUE, fig.pos = 'H', fig.dim = c(12,8), fig.align = "center", message=FALSE, fig.cap = 'Índices de diversidad alpha $\alpha$.'}
 psd5 <- prune_taxa(keepTaxa, psd4)
 alfa.diver <- plot_richness(physeq = psd5, 
               color =  "SITE_ID",
@@ -1159,7 +1165,7 @@ dev.off()
 
 ¿Hay un efecto significativo de la diversidad alfa según el área? Eso lo podríamos probar rápidamente con un análisis de varianza (ANOVA). Para este ejemplo utilicemos otra medida de diversidad, una que phyloseq no incorpora. Faith’s Phylogenetic Diversity es un índice introducido por Daniel Faith en 1992 que no solo considera número de especies sino que también considera qué tanto se parecen estas especies filogenéticamente. Esto es muy relevante porque nos entrega una medida rápida para evaluar prioridades de conservación de ecosistemas, o si se trata de comunidades microbianas, donde tenemos mayor probabilidad de encontrar funciones génicas novedosas.
 
-```{r}
+```{r, message = FALSE, warning = FALSE}
 # Guardamos un dataframe con las medidas de diversidad alfa
 alpha_pd <- estimate_pd(psd5)
 # Combinamos la metadata con alpha.diversity
@@ -1172,7 +1178,7 @@ psd5.anova.table <- xtable(psd5.anova)
 
 El paquete microbiome ofrece otras herramientas para evaluar diversidad que son accesibles fácilmente a través de su función global.
 
-```{r}
+```{r, message = FALSE, warning = FALSE}
 Alpha <- alpha(psd5, index = "all")
 head(Alpha)
 ```
@@ -1180,24 +1186,30 @@ head(Alpha)
 La función alpha nos da 22 medidas de diversidad que nos ayudan a entender la estructura de las comunidades microbianas. En general, estas medidas se dividen en riqueza, diversidad, dominancia, rareza, cobertura y uniformidad.
 El paquete microbiome ofrece funciones para calcular cada uno de estos aspectos de las comunidades microbianas.
 
-```{r}
+```{r, message = FALSE, warning = FALSE}
 # Riqueza
 Riqueza <- richness(psd5)
+Riqueza
 # Dominancia
 Dominancia <- dominance(psd5, index = "all")
+Dominancia
 # Rareza
 Rareza <- rarity(psd5, index = "all")
+Rareza
 # Cobertura
 Cobertura <- coverage(psd5, threshold = 0.5)
+Cobertura
 # Desigualdad
 Desigualdad <- inequality(psd5)
+Desigualdad
 # Uniformidad
 Uniformidad <- evenness(psd5, "all")
+Uniformidad
 ```
 
 Graficamos los resultados y calculamos la significancia estadística. Para esto usamos el paquete ggpubr que genera “publication-ready plots”, algo que siempre es deseable (ejecuta library(ggpubr)).
 
-```{r}
+```{r, message = FALSE, warning = FALSE}
 library("ggpubr")
 # Generamos un objeto `phyloseq` sin taxa´s que tengan 0 reads
 psd5.2 <- prune_taxa(taxa_sums(psd5) > 0, psd5)
@@ -1238,7 +1250,7 @@ ParesArea
 
 Con la función ggviolin podemos generar un gráfico de violín en un solo paso de la siguiente forma.
 
-```{r}
+```{r, include = TRUE, echo = TRUE, fig.pos = 'H', fig.dim = c(12,8), fig.align = "center", message=FALSE, fig.cap = 'Gráfico de Violín de los diferentes índices de diversidad alfa $\alpha$ y su significancia estadística.'}
 # Cargamos una variable de color
 # COLOR <- c("#a6cee3", "#b2df8a", "#fdbf6f")
 Indices <- c("Observed","Shannon","Fisher","Chao1","InverseSimpson")
@@ -1261,7 +1273,7 @@ La diversidad beta $\beta$ es la relación entre la diversidad de especies regio
 Existen diferentes medidas de similitud (o disimilitud, i.e., 1 - similitud) disponibles que nos permiten entender las relaciones entre nuestras muestras. En general todas producen matrices de distancia comparables. El paquete phyloseq ofrece un gran número de medidas de distancia. Las más populares son *UniFrac* y *Weighted UniFrac* (medidas que consideran filogenia) y otras independientes de filogenia como: *Jaccard*, *Manhattan*, *Euclidian*, *Bray-Curtis*, *Canberra*, etc. Por otra parte, la matriz de distancia resultante no se usa en aislación sino que en conjunto con algún método de ordinación o escalamiento multidimensional (ordination). De nuevo, phyloseq ofrece un gran número de métodos entre los cuales se encuentran: detrended y canonical correspondence analysis, Double Principal Coordinate Analysis, Non-metric MultiDimenstional Scaling, y MDS/PCoA.
 Probemos entonces hacer un análisis tipo PCoA con una matriz de distancia que considera las relaciones filogenéticas y otra que no.
 
-```{r}
+```{r, include = TRUE, echo = TRUE, fig.pos = 'H', fig.dim = c(12,8), fig.align = "center", message=FALSE, fig.cap = 'ïndices de Diversidad Beta $\beta$.'}
 # Con esto vemos todos los métodos (métricas de distancia) para calcular la beta diversidad
 distanceMethodList
 
@@ -1279,13 +1291,15 @@ for (o in Ordenacion){
     # Prueba 
     # d <- "bray"
     Ord <- ordinate(physeq = psd5.2, method = o, distance = d)
-    Beta <- plot_ordination(physeq = psd5.2, ordination = Ord, color = "SITE_ID", shape = "YEAR") +
+    Beta <- plot_ordination(physeq = psd5.2, ordination = Ord, 
+                            color = "SITE_ID", shape = "YEAR") +
       theme_classic() +
       geom_point(size = 5) +
       geom_text(mapping = aes(label = SITE_ID), size = 4, vjust = 2, hjust = 1) + 
       geom_vline(xintercept = 0) +
       geom_hline(yintercept = 0) +
-      labs(title = paste("Beta diversity with", o, "-", d, "for the Calakmul samples rRNA 16s")) +
+      labs(title = paste("Beta diversity with", o, "-", d, 
+                         "for the Calakmul samples rRNA 16s")) +
              theme(legend.position = "right", 
                    legend.text = element_text(size=12, face="bold"),
                    legend.title = element_text(size = 12, face = "bold"),
@@ -1294,6 +1308,7 @@ for (o in Ordenacion){
                    plot.title = element_text(hjust = 0.5, size=14, face="bold")) +
              scale_color_brewer(palette = "Set1") + 
              scale_fill_brewer(palette = "Set1")
+    print(Beta)
     pdf(paste0("Resultados/BetaDiversidad/PlotBeta", o, "-", d, ".pdf"), 
         width=10, height=7)
     print(Beta)
@@ -1310,7 +1325,7 @@ Nota que los gráficos de dispersión donde se visualiza este tipo de análisis 
 En específico para comunidades microbianas, el método de doble análisis de coordenadas principales o (DPCoA) es muy apropiado porque analiza conjuntamente dos tipos de datos: una tabla de disimilitud que representa diferencias entre especies y una matriz de abundancia que representa la distribución de especies entre las comunidades. El resultado final es un ensamble del espacio multidimensional que correlacionan las especies con las comunidades. 
 Ahora exploremos escalamiento multidimensional usando un método reciente conocido como t-SNE o t-Distributed Stochastic Neighbor Embedding. t-SNE difiere de otros métodos en que hace énfasis en las distancias locales en vez de las distancias globales, de esta forma generando una mayor resolución o separación entre los puntos o muestras.
 
-```{r}
+```{r, include = TRUE, echo = TRUE, fig.pos = 'H', fig.dim = c(12,8), fig.align = "center", message=FALSE, fig.cap = 'Escalamiento multidimencional usando t-SNE.'}
 Distancia <- c("bray", "unifrac", "dpcoa", "jsd")
 for (d in Distancia){
   # Prueba 
@@ -1345,7 +1360,7 @@ Los resultados son similares aunque las agrupaciones de puntos o muestras ocupan
 
 En cuanto a diversidad beta podemos calcular similitud global a través de todas las muestras de interés o también podemos cuantificar la divergencia de un grupo y compararla con la divergencia de otro, veamos éste último caso.
 
-```{r}
+```{r, include = TRUE, echo = TRUE, fig.pos = 'H', fig.dim = c(12,8), fig.align = "center", message=FALSE, fig.cap = 'Comparación de Divergencia de las tres zonas muestreadas.'}
 # Dataframe donde alamacenamos todo
 BetaBoxplot <- data.frame()
 for (a in Area){
@@ -1378,7 +1393,7 @@ BetaBox
 
 Una manera muy eficiente de obtener una visión general de la composición de las muestras es a través de un gráfico de barras apiladas. 
 
-```{r}
+```{r, include = TRUE, echo = TRUE, fig.pos = 'H', fig.dim = c(12,8), fig.align = "center", message=FALSE, fig.cap = 'Top 10 de géneros más abundantes y clasificado por *Familia*.'}
 # Necesitamos obtener las taxa más abundantes, en este caso el top 10
 top10 <- get_top_taxa(physeq_obj = psd5.2, n = 10, relative = T,
                        discard_other = T, other_label = "Other")
@@ -1397,6 +1412,7 @@ ptop10 <- fantaxtic_bar(top10, color_by = "Family", label_by = "Genus",
         axis.title = element_text(color = "black", size = 12, face = "bold"),
         plot.title = element_text(hjust = 0.5, size=14, face="bold")) + 
   scale_fill_brewer(palette = "Set3") 
+ptop10
 pdf("Resultados/PlotTop10genus.pdf", width=10, height=7)
 ptop10
 dev.off()
@@ -1417,6 +1433,7 @@ ptop10.1 <- fantaxtic_bar(top10, color_by = "Family", label_by = "Genus",
         axis.title = element_text(color = "black", size = 12, face = "bold"),
         plot.title = element_text(hjust = 0.5, size=14, face="bold")) + 
   scale_fill_brewer(palette = "Set3") 
+ptop10.1
 pdf("Resultados/PlotTop10genus1.pdf", width=10, height=7)
 ptop10.1
 dev.off()
@@ -1429,7 +1446,7 @@ dev.off()
 
 Veamos ahora otras herramientas que nos permiten examinar la composición de estas comunidades microbianas. El paquete ampvis2, desarrollado por Mads Albertsen y Kasper Skytte Andersen, nos permite hacer precisamente esto. Primero transformemos el objeto phyloseq con el cual hemos estado trabajando en un objeto ampvis2.
 
-```{r}
+```{r, message = FALSE, warning = FALSE}
 # Necesitamos extraer la tabla de read counts y la tabla de taxonomía del objeto psd5
 # Generamos una copia para no sobreescribir psd5
 obj <- psd5.2
@@ -1465,7 +1482,7 @@ AV2 <- amp_load(otutable, metadata)
 
 Ahora echemos un vistazo a la estructura de las comunidades utilizando “rank abundance curves”.
 
-```{r}
+```{r, include = TRUE, echo = TRUE, fig.pos = 'H', fig.dim = c(12,8), fig.align = "center", message=FALSE, fig.cap = 'Estructura de comunidades por "Curvas de abundancia por rango, logarítmico y no logarítimico.'}
 # No logaritmico
 AV2.abun <- amp_rankabundance(AV2, group_by = "SITE_ID", showSD = T, log10_x = F) +
   theme_classic() +
@@ -1515,7 +1532,7 @@ dev.off()
 El gráfico nos muestra que en la medida que vamos sumando las taxa de mayor a menor abundancia (Rank Abundance) la abundancia de reads cumulativa va aumentando. Lo importante de observar es la forma de la curva. Una curva que sube rápidamente nos indicaría que las comunidades están dominadas por unas cuantas taxa. El objeto AV2 tiene un total de 2220 OTUs, los que están entre un rango de 80 y 1000 están tomando el 90 % de las lecturas,lo que sugiere que el total de las lecturas está determinado por la mitad de todos los OTUs.
 Ahora veremos cuales son mediante un mapa de calor
 
-```{r}
+```{r, include = TRUE, echo = TRUE, fig.pos = 'H', fig.dim = c(12,8), fig.align = "center", message=FALSE, fig.cap = 'Mapas de calor a nivel de "*Phylum*" y/o "*Genus*"'}
 # Phylum y Género
 AmpHM_GP <- amp_heatmap(AV2, 
             group_by = "SITE_ID", facet_by = "SITE_ID", plot_values = TRUE,
@@ -1586,7 +1603,7 @@ dev.off()
 A nivel de "phylum" el más abundante en los tres sitios es Actinobacteriota con porcentajes de 27 a 36 % seguido de Proteobacteria con porcentajes alrededor de 18 - 25 % y en tercer lugar Acidobacteria con porcentajes que van de 14 a 19 %. Respecto al género, son diferentes géneros quienes dominan en cada uno de los sitios, Solirubrobacter es más abundante en Ag1, Haliangium en Ag2 y Nocardioides en Ag3. 
 También podemos realizar una visualización similar pero usando Box Plots.
 
-```{r}
+```{r, include = TRUE, echo = TRUE, fig.pos = 'H', fig.dim = c(12,8), fig.align = "center", message=FALSE, fig.cap = 'Boxplot de calor a nivel de "*Phylum*" y/o "*Genus*"'}
 # Phylum y Género
 AmpBP_PG <- amp_boxplot(AV2, group_by = "SITE_ID", tax_show = 15, 
                         tax_aggregate = "Genus", tax_add = "Phylum",
@@ -1654,7 +1671,7 @@ dev.off()
 
 Veamos ahora si es que algunos de estos microorganismos están compartidos entre todas las muestras. Para esto debemos calcular el core microbiome o el conjunto de taxa compartidas entre un cierto umbral porcentual de muestras y de prevalencia intra-muestra.
 
-```{r}
+```{r, include = TRUE, echo = TRUE, fig.pos = 'H', fig.dim = c(12,8), fig.align = "center", message=FALSE, fig.cap = 'Plotcore a nivel de "*Phylum*" y/o "*Genus*"'}
 AmpCore <- amp_core(AV2, group_by = "SITE_ID", core_pct = 90, margin_plots = "xy",
          margin_plot_values_size = 3, widths = c(3, 1), heights = c(1, 3))
 pdf("Resultados/AbundanciasAV2/PlotAmpCore.pdf", width=10, height=7)
@@ -1667,7 +1684,7 @@ dev.off()
 
 Y visto de otra manera en un diagrama de Venn.
 
-```{r}
+```{r, include = TRUE, echo = TRUE, fig.pos = 'H', fig.dim = c(12,8), fig.align = "center", message=FALSE, fig.cap = 'Diagrama de Venn del Core taxonómico de cada zona'}
 # cut_a % OTUs que debajo de esta abundancia se excluyen
 # cut_f % OTUs que superior a este es la frecuencia que consideran el núcleo
 AmpVenn <- amp_venn(AV2, group_by = "SITE_ID", cut_a = 0.10, cut_f = 20, text_size = 4)
@@ -1684,7 +1701,7 @@ dev.off()
 
 Para obtener los taxones dominantes, solo mantendremos las OTU cuyas lecturas sean mayor a 100 de manera abosluta o que estén presentes en un porcentaje mayor a 1 % de lecturas relativas
 
-```{r}
+```{r, message = FALSE, warning = FALSE}
 # Como esta mi objeto inicial
 psd5 <- prune_taxa(keepTaxa, psd4)
 ```
@@ -1692,7 +1709,7 @@ psd5 <- prune_taxa(keepTaxa, psd4)
 Es necesario que nuestro objeto phyloseq contenga la tabla de "**otu_table**" la siguiente estructura 
 - Filas con OTUs 
 - Columnas con Muestras
-```{r}
+```{r, message = FALSE, warning = FALSE}
 # head(psd5@otu_table@.Data) # Aquí esta mal, esta al contrario
 # Hacemos un nuevo objeto que tenga una transpuesta de psd5@otu_table@.Data
 psd6 <- merge_phyloseq(otu_table(t(psd5@otu_table@.Data), taxa_are_rows = T), 
@@ -1706,14 +1723,14 @@ summary(psd6@otu_table@.Data) # Resumen estadístico
 
 Debido a que el análisis a nivel de "Specie" no es tan confiable, nos quedamos a nivel de género y además esto hace que los del mismo género los una en uno solo
 
-```{r}
+```{r, message = FALSE, warning = FALSE}
 # Cortamos los OTUs a nivel de GENUS
 psd7 <- tax_glom(psd6,taxrank = rank_names(psd6)[6]) 
 summary(psd7@otu_table@.Data)
 ```
 
 De aquí en adelante, trabajamos con valores relativos y con valores absolutos
-```{r}
+```{r, message = FALSE, warning = FALSE}
 # Absolutos
 # Filtramos aquellos géneros que tienen una media mínima de 100 lecturas absolutas
 psd.abs.100 <- filter_taxa(psd7, function(x) mean(x) > 100.0, TRUE)
@@ -1726,7 +1743,7 @@ psd.rel.1 <- filter_taxa(psd.rel, function(x) mean(x) > 1.0, TRUE)
 
 El paquete pheatmap necesista un dataframe como entrada, asi que haremos unos desde el objeto phyloseq
 
-```{r}
+```{r, message = FALSE, warning = FALSE}
 #Absolutos
 psd.abs.100
 psd.abs.df <- as.data.frame(psd.abs.100@otu_table@.Data)
@@ -1744,7 +1761,7 @@ str(psd.rel.df)
 
 Ahora, necesitamos un nuevo marco de datos donde asignaremos los metadatos que queremos visualizar en el pheatmap
 
-```{r}
+```{r, message = FALSE, warning = FALSE}
 meta <- data.frame(Year = metadata$YEAR, row.names = rownames(metadata))
 #meta$ID <- ID=metadata$ID
 #meta$pH <- metadata$pH
@@ -1757,7 +1774,7 @@ str(meta)
 
 Tambien generaremos una lista de colores
 
-```{r}
+```{r, message = FALSE, warning = FALSE}
 # Colores del metadatos
 Color <- list(#ID=c("Ag2_Sep17"="antiquewhite", "Ag3_Sep17"="cadetblue1",
                   #    "Ag1_Sep17"="chartreuse", "Ag3_Sep18"="azure4", 
@@ -1777,7 +1794,7 @@ ColorHPM <- c("#ffffff","#fff7fb","#ece2f0","#d0d1e6","#a6bddb","#67a9cf","#3690
 
 Corremos pheatmap
 
-```{r}
+```{r, include = TRUE, echo = TRUE, fig.pos = 'H', fig.dim = c(12,8), fig.align = "center", message=FALSE, fig.cap = 'Mapas de calor usando Pheatmap con valores absolutos y valores relativos.'}
 # Aboslutos
 PHMap.Abs <- pheatmap(psd.abs.df, color = ColorHPM, cluster_cols = TRUE, 
                       cutree_cols = 3, cutree_rows = 4, border_color ="#000000",
@@ -1807,7 +1824,7 @@ dev.off()
 
 Vamos a crear un data.frame con el que trabajaremos
 
-```{r}
+```{r, message = FALSE, warning = FALSE}
 # Cortamos y agrupamos a nivel de género
 Genero <- tax_glom(psd5.2, taxrank = 'Genus')
 
@@ -1830,7 +1847,7 @@ V.Relativos$Phylum[V.Relativos$Abundance < 1.0] <- "Phyla < 1.0 % abund."
 
 Graficamos la abundancia a diferente nivel taxonómico
 
-```{r}
+```{r, include = TRUE, echo = TRUE, fig.pos = 'H', fig.dim = c(12,8), fig.align = "center", message=FALSE, fig.cap = 'Gráficos de abundancia a diferentes niveles taxonómicos.'}
 Taxon <- c("Family", "Phylum")
 # Ciclo
 for (t in Taxon){
