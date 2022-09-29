@@ -1271,7 +1271,7 @@ Ordenacion <- c("NMDS", "MDS", "PCoA", "DPCoA")
 Distancia <- c("bray", "unifrac", "dpcoa", "jsd", "jaccard")
 
 #Para poder usar la variable año en la bandera "shape" la convertimos en factor
-psd5.2@sam_data@.Data[[6]] <- as.factor(psd5@sam_data@.Data[[6]])
+psd5.2@sam_data@.Data[[6]] <- as.factor(psd5.2@sam_data@.Data[[6]])
 for (o in Ordenacion){
   # Prueba 
   # o <- "NMDS"
@@ -1651,5 +1651,243 @@ svg("Resultados/AbundanciasAV2/PlotAmpBP_G.svg", width=10, height=7)
 AmpBP_G
 dev.off()
 ```
+
+Veamos ahora si es que algunos de estos microorganismos están compartidos entre todas las muestras. Para esto debemos calcular el core microbiome o el conjunto de taxa compartidas entre un cierto umbral porcentual de muestras y de prevalencia intra-muestra.
+
+```{r}
+AmpCore <- amp_core(AV2, group_by = "SITE_ID", core_pct = 90, margin_plots = "xy",
+         margin_plot_values_size = 3, widths = c(3, 1), heights = c(1, 3))
+pdf("Resultados/AbundanciasAV2/PlotAmpCore.pdf", width=10, height=7)
+AmpCore
+dev.off()
+svg("Resultados/AbundanciasAV2/PlotAmpCore.svg", width=10, height=7)
+AmpCore
+dev.off()
+```
+
+Y visto de otra manera en un diagrama de Venn.
+
+```{r}
+# cut_a % OTUs que debajo de esta abundancia se excluyen
+# cut_f % OTUs que superior a este es la frecuencia que consideran el núcleo
+AmpVenn <- amp_venn(AV2, group_by = "SITE_ID", cut_a = 0.10, cut_f = 20, text_size = 4)
+AmpVenn
+pdf("Resultados/AbundanciasAV2/PlotAmpVenn.pdf", width=10, height=7)
+AmpVenn
+dev.off()
+svg("Resultados/AbundanciasAV2/PlotAmpVenn.svg", width=10, height=7)
+AmpVenn
+dev.off()
+```
+
+# Pheatmap
+
+Para obtener los taxones dominantes, solo mantendremos las OTU cuyas lecturas sean mayor a 100 de manera abosluta o que estén presentes en un porcentaje mayor a 1 % de lecturas relativas
+
+```{r}
+# Como esta mi objeto inicial
+psd5 <- prune_taxa(keepTaxa, psd4)
+```
+
+Es necesario que nuestro objeto phyloseq contenga la tabla de "**otu_table**" la siguiente estructura 
+- Filas con OTUs 
+- Columnas con Muestras
+```{r}
+# head(psd5@otu_table@.Data) # Aquí esta mal, esta al contrario
+# Hacemos un nuevo objeto que tenga una transpuesta de psd5@otu_table@.Data
+psd6 <- merge_phyloseq(otu_table(t(psd5@otu_table@.Data), taxa_are_rows = T), 
+                       psd5@tax_table, 
+                       psd5@sam_data, 
+                       psd5@phy_tree, 
+                       psd5@refseq)
+head(psd6@otu_table@.Data) # Ya está como la queremos
+summary(psd6@otu_table@.Data) # Resumen estadístico
+```
+
+Debido a que el análisis a nivel de "Specie" no es tan confiable, nos quedamos a nivel de género y además esto hace que los del mismo género los una en uno solo
+
+```{r}
+# Cortamos los OTUs a nivel de GENUS
+psd7 <- tax_glom(psd6,taxrank = rank_names(psd6)[6]) 
+summary(psd7@otu_table@.Data)
+```
+
+De aquí en adelante, trabajamos con valores relativos y con valores absolutos
+```{r}
+# Absolutos
+# Filtramos aquellos géneros que tienen una media mínima de 100 lecturas absolutas
+psd.abs.100 <- filter_taxa(psd7, function(x) mean(x) > 100.0, TRUE)
+
+# Relativos
+psd.rel <- transform_sample_counts(psd7, function(x) x*100 / sum(x))
+# Filtramos aquellos géneros que tiene al menos un 1 % de lecturas relativas 
+psd.rel.1 <- filter_taxa(psd.rel, function(x) mean(x) > 1.0, TRUE)
+```
+
+El paquete pheatmap necesista un dataframe como entrada, asi que haremos unos desde el objeto phyloseq
+
+```{r}
+#Absolutos
+psd.abs.100
+psd.abs.df <- as.data.frame(psd.abs.100@otu_table@.Data)
+dim(psd.abs.df)
+rownames(psd.abs.df) <- make.names(psd.abs.100@tax_table@.Data[,6], unique = T)
+str(psd.abs.df)
+
+#Relativos
+psd.rel.1
+psd.rel.df <- as.data.frame(psd.rel.1@otu_table@.Data)
+dim(psd.rel.df)
+rownames(psd.rel.df) <- make.names(psd.rel.1@tax_table@.Data[,6], unique = T)
+str(psd.rel.df)
+```
+
+Ahora, necesitamos un nuevo marco de datos donde asignaremos los metadatos que queremos visualizar en el pheatmap
+
+```{r}
+meta <- data.frame(Year = metadata$YEAR, row.names = rownames(metadata))
+#meta$ID <- ID=metadata$ID
+#meta$pH <- metadata$pH
+#meta$N_Total <- metadata$N_TOTAL
+#meta$P_Olsen <- metadata$P_OLSEN
+#meta$Organic <- metadata$ORGANIC
+meta$Site <- metadata$SITE_ID
+str(meta)
+```
+
+Tambien generaremos una lista de colores
+
+```{r}
+# Colores del metadatos
+Color <- list(#ID=c("Ag2_Sep17"="antiquewhite", "Ag3_Sep17"="cadetblue1",
+                  #    "Ag1_Sep17"="chartreuse", "Ag3_Sep18"="azure4", 
+                  #    "Ag3_Jun19"="coral", "Ag2_Sep19"="bisque3",
+                  #    "Ag2_Sep18"="bisque3", "Ag3_Sep19"="darkcyan",
+                  #    "Ag1_Sep18"="darkmagenta", "Ag1_Sep19"="deepskyblue3"),
+                 Year = c("2017"="deepskyblue3", "2018"="indianred4", "2019"="purple4"),
+                 #pH=c("6.7"="#bababa", "6.1"="brown4", "6.2"="#377eb8"),
+                 #N_Total = c("0.22"="darkolivegreen", "0.29"="#984ea3", "0.36"="darkgoldenrod3"),
+                 #P_Oolse = c("13.5"="darkred", "4.0"="deeppink4", "29.6"="aquamarine4"),
+                 #Organic = c("13.5"="darkseagreen4", "24.2"="gold4", "12.0"="gray"),
+                 Site = c("Ag1"="lightseagreen", "Ag2"="midnightblue", "Ag3"="mediumvioletred"))
+# Color Pheatmap
+ColorHPM <- c("#ffffff","#fff7fb","#ece2f0","#d0d1e6","#a6bddb","#67a9cf","#3690c0",
+                    "#02818a","#016c59","#014636")
+```
+
+Corremos pheatmap
+
+```{r}
+# Aboslutos
+PHMap.Abs <- pheatmap(psd.abs.df, color = ColorHPM, cluster_cols = TRUE, 
+                      cutree_cols = 3, cutree_rows = 4, border_color ="#000000",
+                      annotation_col = meta, annotation_colors = Color)
+PHMap.Abs
+pdf("Resultados/PlotPHMap.Abs.pdf", width=20, height=10)
+PHMap.Abs
+dev.off()
+svg("Resultados/PlotPHMap.Abs.svg", width=20, height=10)
+PHMap.Abs
+dev.off()
+
+# Relativos
+PHMap.Rel <- pheatmap(psd.rel.df, color = ColorHPM, cluster_cols = TRUE, 
+                      cutree_cols = 3, cutree_rows = 4, border_color ="#000000",
+                      annotation_col = meta, annotation_colors = Color)
+PHMap.Rel
+pdf("Resultados/PlotPHMap.Rel.pdf", width=20, height=10)
+PHMap.Rel
+dev.off()
+svg("Resultados/PlotPHMap.Rel.svg", width=20, height=10)
+PHMap.Rel
+dev.off()
+```
+
+# Otros gráficos
+
+Vamos a crear un data.frame con el que trabajaremos
+
+```{r}
+# Cortamos y agrupamos a nivel de género
+Genero <- tax_glom(psd5.2, taxrank = 'Genus')
+
+# Absolutos
+# Generamos el data.frame
+V.Absolutos <- psmelt(Genero)
+str(V.Absolutos)
+
+# Relativos
+# Conversión de valores absolutos a relativos
+Transfomacion <- transform_sample_counts(Genero, function(x) x*100 / sum(x))
+# Generamos el data.frame
+V.Relativos <- psmelt(Transfomacion)
+str(V.Relativos)
+# Renombramos géneros, phylum y familias que tengan menor al 1 %
+V.Relativos$Genus[V.Relativos$Abundance < 1.0] <- "Genus < 1.0 % abund."
+V.Relativos$Family[V.Relativos$Abundance < 1.0] <- "Family < 1.0 % abund."
+V.Relativos$Phylum[V.Relativos$Abundance < 1.0] <- "Phyla < 1.0 % abund."
+```
+
+Graficamos la abundancia a diferente nivel taxonómico
+
+```{r}
+Taxon <- c("Family", "Phylum")
+# Ciclo
+for (t in Taxon){
+  # Prueba
+  # t <- c("Family")
+  # Absoluto
+  plot.a <- ggplot(data = V.Absolutos, aes(x = V.Relativos[,t], y = Abundance, 
+                                           fill = SITE_ID)) +
+  geom_bar(aes(), stat = "identity", position = "stack") + 
+  theme_classic() +
+  labs(x="Phylum", y="Absolute abundance",
+       title = "Absolute abundance of analyzed samples") +
+  theme(legend.position = "right", 
+        legend.text = element_text(size=12, face="bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        axis.text = element_text(color = "black", size = 12, face = "bold"),
+        axis.title = element_text(color = "black", size = 12, face = "bold"),
+        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+        plot.title = element_text(hjust = 0.5, size=14, face="bold"))+
+  facet_grid(~ V.Absolutos$YEAR)
+  print(plot.a)
+  pdf(paste0("Resultados/PlotAbunAbs",t,".pdf"), width=20, height=10)
+  print(plot.a)
+  dev.off()
+  svg(paste0("Resultados/PlotAbunAbs",t,".svg"), width=20, height=10)
+  print(plot.a)
+  dev.off()
+  # Relativo
+  plot.r <- ggplot(data = V.Relativos, aes(x = V.Relativos[,t], y = Abundance, 
+                                           fill = SITE_ID)) + 
+    geom_bar(aes(), stat = "identity", position = "fill") + 
+    theme_classic() + 
+    labs(x="Phylum", y="Relative abundance",
+         title = "Relative abundance of analyzed samples") +
+    theme(legend.position = "right", 
+      legend.text = element_text(size=12, face="bold"),
+      legend.title = element_text(size = 12, face = "bold"),
+      axis.text = element_text(color = "black", size = 12, face = "bold"),
+      axis.title = element_text(color = "black", size = 12, face = "bold"),
+      axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
+      plot.title = element_text(hjust = 0.5, size=14, face="bold")) +
+    facet_grid(. ~ V.Relativos$YEAR)
+  print(plot.r)
+  pdf(paste0("Resultados/PlotAbunRel",t,".pdf"), width=20, height=10)
+  print(plot.r)
+  dev.off()
+  svg(paste0("Resultados/PlotAbunRel",t,".svg"), width=20, height=10)
+  print(plot.r)
+  dev.off()
+}
+```
+
+
+
+
+
+
+
 
 
