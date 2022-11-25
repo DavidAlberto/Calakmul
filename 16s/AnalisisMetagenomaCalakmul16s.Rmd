@@ -84,6 +84,12 @@ library("tsnemicrobiota")
 library("Rtsne")
 library("ampvis2")
 library("btools")
+library("RColorBrewer")
+library("igraph")
+library("vegan")
+library("factoextra")
+library("pbkrtest")
+library("BiodiversityR")
 ```
 
 # DADA2
@@ -1785,11 +1791,409 @@ for (t in Taxon){
 }
 ```
 
+# Análisis exploratorio de datos de microbiomas
 
+Trabajamos a partir del objeto phyloseq
 
+```{r}
+physeq <- psd6
+```
 
+Alfa diversidad
 
+```{r}
+# Alfa deversidad
+plot_richness(physeq, x = "SITE_ID", color = "SITE_ID")
+```
 
+Abundancias
 
+```{r}
+# Abundancias
+plot_bar(physeq, fill = "SITE_ID")
 
+# Nos da el nombre de los taxones top 5
+TopNGenus <- names(sort(taxa_sums(physeq), TRUE)[1:5])
+# Generamos un objeto phyloseq con solo los 5 taxa que escogimos
+Top5Genus <- prune_taxa(TopNGenus, physeq)
+# Graficamos
+plot_bar(Top5Genus, fill = "SITE_ID")
+plot_bar(Top5Genus, fill = "SITE_ID", facet_grid = ~SITE_ID)
+#Abundancias relativas
+top_5_relativo <- transform_sample_counts(Top5Genus, function(x) x/sum(x)*100)
+#Grafico de barras con abundancias relativas
+plot_bar(top_5_relativo, fill="SITE_ID")
+plot_bar(top_5_relativo, fill="SITE_ID", facet_grid = ~SITE_ID)
+
+#Convertimos a dataframe
+top_5_relativo_df <- psmelt(top_5_relativo)
+#Damos formato como caracter y factor a los OTU
+top_5_relativo_df$OTU <- as.character(top_5_relativo_df$OTU)
+top_5_relativo_df$OTU <- as.factor(top_5_relativo_df$OTU)
+
+#Convertimos a factor las muestras, no fue necesario determinar los niveles, ya los
+#detecta como tal
+top_5_relativo_df$Sample <- as.factor(top_5_relativo_df$Sample)
+
+#definimos paleta de colores por niveles de OTU
+OTU_colors<- brewer.pal(length(levels(top_5_relativo_df$OTU)),"Dark2")
+#especificamos los aes de ggplot
+global_rel_plot<-ggplot(top_5_relativo_df, aes(x=Sample, y=Abundance, fill=OTU)) +
+  geom_bar(aes(), stat="identity", position="stack") +
+  scale_fill_manual(values=OTU_colors) +
+  labs(x= "Sample", y = "Relative abundance") +
+  facet_grid(~SITE_ID, scales = "free_x") +
+  ggtitle("Relative abundance by Groups") +
+  theme(axis.title = element_text(size = 14), 
+        axis.text.x = element_text(size = 5), 
+        plot.title = element_text(size = 20))
+
+global_rel_plot
+```
+
+Gráficos de mapa de calor
+
+```{r}
+# Nos da el nombre de los taxones top 5
+TopNGenus <- names(sort(taxa_sums(physeq), TRUE)[1:5])
+# Generamos un objeto phyloseq con solo los 5 taxa que escogimos
+Top5Genus <- prune_taxa(TopNGenus, physeq)
+# Graficamos
+plot_heatmap(Top5Genus)
+plot_heatmap(top_5_relativo)
+# Método NMDS y distancia de Bray-Curtis
+p <- plot_heatmap(Top5Genus, "NMDS", "bray")
+p
+plot_heatmap(Top5Genus, "NMDS", "bray", low="#000033", high="#CCFF66")
+plot_heatmap(Top5Genus, "NMDS", "bray", low="#000033", high="#FF3300")
+plot_heatmap(Top5Genus, "NMDS", "bray", low="#000033", high="#66CCFF")
+plot_heatmap(Top5Genus, "NMDS", "bray", low="#66CCFF", high="#000033", na.value="white")
+# Método de PCoA y distancia de Bray-Curtis
+plot_heatmap(Top5Genus, "PCoA", "bray")
+```
+
+Gráfico de redes
+
+```{r}
+set.seed(123)
+# Hacemos una gráfica a partir de el objeto phyloseq
+ig <- make_network(physeq, max.dist=0.7)
+# Graficamos
+plot_network(ig, physeq, color="SITE_ID", shape="SITE_ID")
+# Graficamos sin necesidad de hacer el objeto anterior
+plot_net(physeq, maxdist = 0.5, color = "SITE_ID", shape="SITE_ID")
+```
+
+Filogenética
+
+```{r}
+physeq2 <- prune_taxa(taxa_names(physeq)[1:50], physeq)
+plot_tree(physeq2, ladderize = "left", color = "SITE_ID")
+plot_tree(physeq2, ladderize = "left", color = "ID")
+plot_tree(physeq, ladderize = "left", color = "YEAR", shape = "SITE_ID")
+plot_tree(physeq, ladderize = "left", color = "YEAR", shape = "SITE_ID") +
+coord_polar(theta = "y")
+```
+
+# Agrupamiento
+
+```{r}
+abund_table <- t(physeq@otu_table@.Data)
+abund_table_norm <- decostand(abund_table, "normalize")
+bc_dist <- vegdist(abund_table_norm , method = "bray")
+
+# Sencillo
+cluster_single <- hclust (bc_dist, method = 'single')
+plot(cluster_single)
+# Completo
+cluster_complete <- hclust (bc_dist, method = 'complete')
+plot(cluster_complete)
+# Promedio
+cluster_average <- hclust (bc_dist, method = 'average')
+plot(cluster_average)
+# Mínima de Ward
+cluster_ward <- hclust (bc_dist, method = 'ward.D2')
+plot(cluster_ward)
+# Todos juntos
+# Correrlo en consola para visualizarlo mejor
+par (mfrow = c(2,2))
+plot(cluster_single)
+plot(cluster_complete)
+plot(cluster_average)
+plot(cluster_ward)
+par (mfrow = c(1,1))
+```
+
+Mismos gráficos usando el paquete *factorextra*
+Mapa de calor
+
+```{r}
+fviz_dist(dist.obj = bc_dist, lab_size = 8)
+set.seed(12345)
+```
+
+Dendogramas
+
+```{r}
+# Sencilla
+hc_single <- hclust(d=bc_dist, method = "single")
+fviz_dend(x = hc_single, k=3,
+cex = 0.7,
+main = "",
+xlab = "Samples",
+ylab = "Distance",
+sub = "",
+horiz = TRUE)+
+geom_hline(yintercept = 0.3, linetype = "dashed")
+
+# Completa
+hc_complete <- hclust(d=bc_dist, method = "complete")
+fviz_dend(x = hc_complete, k=3,
+cex = 0.7,
+main = "",
+xlab = "Samples",
+ylab = "Distance",
+sub = "",horiz = TRUE)+
+geom_hline(yintercept = 0.5, linetype = "dashed")
+
+# Ward
+hc_ward <- hclust(d=bc_dist, method = "ward.D2")
+fviz_dend(x = hc_ward, k=3,
+cex = 0.7,
+main = "",
+xlab = "Samples",
+ylab = "Distance",
+sub = "",
+horiz = TRUE)+
+geom_hline(yintercept = 0.5, linetype = "dashed")
+
+# Promedio
+hc_average <- hclust(d=bc_dist, method = "average")
+fviz_dend(x = hc_average, k=3,
+cex = 0.7,
+main = "",
+xlab = "Samples",
+ylab = "Distance",
+sub = "",
+horiz = TRUE) +
+geom_hline(yintercept = 0.41, linetype = "dashed")
+
+```
+
+# Ordenación
+
+## Análisis de Componentes Principales
+
+```{r}
+# Tabla de metadatos
+meta_table <- samdf
+# Estandarizamos la abundancia de los datos
+stand_abund_table <- decostand(abund_table, method = "total")
+PCA <- rda(stand_abund_table)
+PCA
+# Con el siguiente código podemos pedir los valores de los eigenvalores.
+eig <- PCA$CA$eig
+eig
+# Variación total
+sum(apply(stand_abund_table, 2, var))
+# Otra manera de visualizar
+head(summary(PCA))
+# variables (species) tienen la mayor correlación absoluta al primer y segundo eje:
+head(sort(abs(PCA$CA$v[,1]),decreasing = TRUE))
+head(sort(abs(PCA$CA$v[,2]),decreasing = TRUE))
+
+# Diagramas utilizando la función biplot(). 
+# La opción de visualización “species” es la etiqueta del paquete vegan para OTUs/taxa. 
+# Por defecto es “sites” (etiqueta para muestras).
+biplot(PCA, display = 'species', type = c("text"))
+#Mismo biplot con etiquetas
+biplot(PCA, display = c('sites','species'), type=c("text","points"))
+ordiplot(PCA, display = "sites", type = "text")
+```
+
+## Análisis de coordenadas principales (PCoA)
+
+```{r}
+bc_dist <-vegdist(abund_table, "bray")
+PCoA <- cmdscale(bc_dist, eig = TRUE, k = 2)
+PCoA
+# Variación explicada primer eje
+explainedvar1 <- round(PCoA$eig[1] / sum(PCoA$eig), 2) * 100
+explainedvar1
+# Variación explicada segundo eje
+explainedvar2 <- round(PCoA$eig[2] / sum(PCoA$eig), 2) * 100
+explainedvar2
+# Suma
+sum_eig <- sum(explainedvar1, explainedvar2)
+sum_eig
+```
+
+Criterios de evaluación
+
+```{r}
+# Correr todo junto
+# Definir los parametros del plot
+par(mar = c(5, 5, 1, 2) + 0.1)
+# Fraficar eigenvalores
+plot(PCoA$eig, xlab = "PCoA", ylab = "Eigenvalue",
+las = 1, cex.lab = 1.5, pch = 16)
+# Añadir expextación del criterio de Kaiser-Guttman y el modelo Broken Stick
+abline(h = mean(PCoA$eig), lty = 2, lwd = 2, col = "blue")
+b_stick <- bstick(8, sum(PCoA$eig))
+lines(1:8, b_stick, type = "l", lty = 4, lwd = 2, col = "red")
+# Añadir legendas
+legend("topright", legend = c("Avg Eigenvalue", "Broken-Stick"),
+lty = c(2, 4), bty = "n", col = c("blue", "red"))
+```
+
+Gráfico
+
+```{r}
+# Correr todo junto
+# Definir parámetros
+par(mar = c(5, 5, 1, 2) + 0.1)
+# Initiate Plot
+plot(PCoA$points[ ,1], PCoA$points[ ,2], ylim = c(-0.5, 0.5),
+xlab = paste("PCoA 1 (", explainedvar1, " %)", sep = ""),
+ylab = paste("PCoA 2 (", explainedvar2, " %)", sep = ""),
+pch = 5, cex = 1.0, type = "n", cex.lab = 1.0, cex.axis = 1.2, axes = FALSE)
+# Añadir ejes
+axis(side = 1, labels = T, lwd.ticks = 2, cex.axis = 1.2, las = 1)
+axis(side = 2, labels = T, lwd.ticks = 2, cex.axis = 1.2, las = 1)
+abline(h = 0, v = 0, lty = 3)
+box(lwd = 2)
+# Añadir puntos y texto
+points(PCoA$points[ ,1], PCoA$points[ ,2],
+pch = 19, cex = 3, bg = "blue", col = "blue")
+text(PCoA$points[ ,1], PCoA$points[ ,2],
+labels = row.names(PCoA$points))
+```
+
+```{r}
+# Correr todo junto
+# Definir parámetros
+par(mar = c(5, 5, 1, 2) + 0.1)
+# Inicializar el plot
+plot(PCoA$points[ ,1], PCoA$points[ ,2], ylim = c(-0.5, 0.5),
+xlab = paste("PCoA 1 (", explainedvar1, " %)", sep = ""),
+ylab = paste("PCoA 2 (", explainedvar2, " %)", sep = ""),
+pch = 5, cex = 1.0, type = "n", cex.lab = 1.0, cex.axis = 1.2, axes = FALSE)
+# Añadir ejes
+axis(side = 1, labels = T, lwd.ticks = 2, cex.axis = 1.2, las = 1)
+axis(side = 2, labels = T, lwd.ticks = 2, cex.axis = 1.2, las = 1)
+abline(h = 0, v = 0, lty = 3)
+box(lwd = 2)
+# Añadir puntos y etiquetas
+points(PCoA$points[ ,1], PCoA$points[ ,2],
+pch = 19, cex = 3, bg = "blue", col = "blue")
+text(PCoA$points[ ,1], PCoA$points[ ,2],
+labels = row.names(PCoA$points))
+CalakmulREL <- abund_table
+for(i in 1:nrow(abund_table)){
+CalakmulREL[i, ] = abund_table[i, ] / sum(abund_table[i, ])
+}
+# Calcular y añadir el score de las especies
+PCoA <- add.spec.scores(PCoA,CalakmulREL,method = "pcoa.scores",Rscale=TRUE,scaling=1, multi=1)
+text(PCoA$cproj[ ,1], PCoA $cproj[ ,2],
+labels = row.names(PCoA$cproj),cex=0.5, col = "blue")
+```
+
+```{r}
+genus_corr <- add.spec.scores(PCoA, CalakmulREL, method = "cor.scores")$cproj
+corrcut <- 0.8 #definir el cutoff  
+import_genus <- genus_corr[abs(genus_corr[, 1]) >= corrcut | abs(genus_corr[, 2]) >= corrcut, ]
+# Los 12 géneros importantes con correlación mayor o igual a 0,8 
+# a lo largo de los ejes PCoA se imprimen a continuación:
+import_genus[complete.cases(import_genus),] %>%
+kbl(booktabs = TRUE, align = "c",
+caption = "Géneros más importantes con correlación mayor o igual a 0.8" ) %>%
+kable_styling(position = "center",
+latex_options = c("hold_position", "striped"),
+font_size = 7)
+```
+
+```{r}
+# Correr todo junto
+# Definir parámetros
+par(mar = c(5, 5, 1, 2) + 0.1)
+# Inicializar el plot
+plot(PCoA$points[ ,1], PCoA$points[ ,2], ylim = c(-0.5, 0.5),
+xlab = paste("PCoA 1 (", explainedvar1, " %)", sep = ""),
+ylab = paste("PCoA 2 (", explainedvar2, " %)", sep = ""),
+pch = 5, cex = 1.0, type = "n", cex.lab = 1.0, cex.axis = 1.2, axes = FALSE)
+# Añadir ejes
+axis(side = 1, labels = T, lwd.ticks = 2, cex.axis = 1.2, las = 1)
+axis(side = 2, labels = T, lwd.ticks = 2, cex.axis = 1.2, las = 1)
+abline(h = 0, v = 0, lty = 3)
+box(lwd = 2)
+# Añadir puntos y etiquetas
+points(PCoA$points[ ,1], PCoA$points[ ,2],
+pch = 19, cex = 3, bg = "blue", col = "blue")
+text(PCoA$points[ ,1], PCoA$points[ ,2],
+labels = row.names(PCoA$points))
+CalakmulREL <- abund_table
+for(i in 1:nrow(abund_table)){
+CalakmulREL[i, ] = abund_table[i, ] / sum(abund_table[i, ])
+}
+# Calcular y añadir el score de las especies
+PCoA <- add.spec.scores(PCoA,CalakmulREL,method = "pcoa.scores",Rscale=TRUE,scaling=1, multi=1)
+text(PCoA$cproj[ ,1], PCoA $cproj[ ,2],
+labels = row.names(PCoA$cproj),cex=0.5, col = "blue")
+genus_corr <- add.spec.scores(PCoA, CalakmulREL, method = "cor.scores")$cproj
+corrcut <- 0.7 # definir el cutoff
+import_genus <- genus_corr[abs(genus_corr[, 1]) >= corrcut | abs(genus_corr[, 2]) >= corrcut, ]
+# Código para los generos con un p-valor<0.05
+fit <- envfit(PCoA, CalakmulREL, perm = 999)
+plot(fit, p.max = 0.05, cex=0.5, col = "red")
+
+```
+
+## Escalamiento multidimensional no métrico (NMDS)
+
+```{r}
+bc_nmds <- metaMDS(abund_table, dist = "bray")
+bc_nmds
+# Graficamos
+ordiplot (bc_nmds, type = 't')
+ordiplot(bc_nmds, display = "sites", type = "text")
+par (mfrow = c(1,2))
+stressplot (bc_nmds)
+plot (bc_nmds, display = 'sites', type = 't', main = 'Goodness of fit')
+points (bc_nmds, display = 'sites', cex = goodness (bc_nmds)*300)
+```
+
+## Análisis de correspondencia
+
+```{r}
+Calakmul_genus_cca <- cca(abund_table)
+Calakmul_genus_cca
+plot(Calakmul_genus_cca, display="sites")
+plot(Calakmul_genus_cca, display="sites", type="p")
+ordiplot(Calakmul_genus_cca)
+```
+
+```{r}
+evplot <- function(ev)
+{# Broken stick model (MacArthur 1957)
+n <- length(ev)
+bsm <- data.frame(j=seq(1:n), p=0)
+bsm$p[1] <- 1/n
+for (i in 2:n) bsm$p[i] <- bsm$p[i-1] + (1/(n + 1 - i))
+bsm$p <- 100*bsm$p/n
+# Graficar eigenvalores y porcentaje de varianza en cada eje
+op <- par(mfrow=c(2,1))
+barplot(ev, main="Eigenvalues", col="bisque", las=2)
+abline(h=mean(ev), col="red")
+legend("topright", "Average eigenvalue", lwd=1, col=2, bty="n")
+barplot(t(cbind(100*ev/sum(ev), bsm$p[n:1])), beside=TRUE,
+main=" % variation", col=c("bisque",2), las=2)
+legend("topright", c(" % eigenvalue", "Broken stick model"),
+pch=15, col=c("bisque",2), bty="n")
+par(op)
+}
+# Plot de eigenvalores y porcentaje de varianza en cada eje
+ev <- Calakmul_genus_cca$CA$eig
+
+evplot(ev)
+```
 
