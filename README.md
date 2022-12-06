@@ -21,4 +21,4 @@ Este análisis se encuentra en el siguiente link [16s](https://github.com/DavidA
 
 ## Análisis de datos - Shotgun
 
-Este análisis se encuentra en el siguiente link [Shotgun](https://github.com/DavidAlberto/Calakmul/blob/main/Shotgun/AnalisisMetagenomaCalakmulShotgun.Rmd).
+Este análisis se encuentra en el siguiente link [Shotgun](https://github.com/DavidAlberto/Calakmul/blob/main/Shotgun/AnalisisMetagenomaCalakmulShotgun.html).
