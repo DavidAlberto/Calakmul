@@ -21,4 +21,4 @@ Este análisis se encuentra en el siguiente link [16s](16s/AnalisisMetagenomaCal
 
 ## Análisis de datos - Shotgun
 
-Este análisis se encuentra en el siguiente link [Shotgun](Shotgun/AnalisisMetagenomaCalakmulShotgun.html).
+Este análisis se encuentra en el siguiente link [Shotgun](Shotgun/AnalisisMetagenomaCalakmulShotgun.Rmd).
