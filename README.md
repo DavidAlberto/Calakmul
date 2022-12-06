@@ -17,8 +17,8 @@ Investigadores asociados
 
 ## Análisis de datos - Metabarcoding
 
-Este análisis se encuentra en el siguiente link [16s](https://github.com/DavidAlberto/Calakmul/blob/main/16s/AnalisisMetagenomaCalakmul16s.Rmd).
+Este análisis se encuentra en el siguiente link [16s](16s/AnalisisMetagenomaCalakmul16s.Rmd).
 
 ## Análisis de datos - Shotgun
 
-Este análisis se encuentra en el siguiente link [Shotgun](https://github.com/DavidAlberto/Calakmul/blob/main/Shotgun/AnalisisMetagenomaCalakmulShotgun.html).
+Este análisis se encuentra en el siguiente link [Shotgun](Shotgun/AnalisisMetagenomaCalakmulShotgun.html).
