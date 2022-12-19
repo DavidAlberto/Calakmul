@@ -82,6 +82,7 @@ library("BiodiversityR")
 ## Directorio de trabajo
 
 Ajustamos directorio de trabajo donde se encuentran las lecturas "reads"
+
 ```{r}
 # IMPORTANTE
 # Ajustamos path de trabajo según tu PC
@@ -295,122 +296,275 @@ merged_metagenomes.Ag1_Ag2 <- subset_samples(subset_samples(merged_metagenomes, 
 Siguimos viendo el objeto phyloseq
 
 ```{r, message = FALSE, warning = FALSE}
-# Con esto nos dice cuántos datos vacios hay, en este caso serán todos aquellos que aparezcan como TRUE
+#Con esto nos dice cuántos datos vacios hay, en este caso serán todos aquellos que aparezcan como TRUE
 summary(merged_metagenomes@tax_table@.Data== "") # Hay 1337 NAs
-#Actualizamos la variable merged_metagenomes indicando que se incluya todo lo diferente (!=) a vacio "", para la variable "Genus"
-merged_metagenomes <- subset_taxa(merged_metagenomes, Genus != "")
-summary(merged_metagenomes@tax_table@.Data== "") # Ya no hay ninguno
+# Generamos un objeto `merged_metagenomes` sin taxa´s que tengan 0 reads
+merged_metagenomes <- prune_taxa(taxa_sums(merged_metagenomes) > 0, merged_metagenomes)
+# Actualizamos la variable merged_metagenomes indicando que se incluya todo lo diferente (!=) a vacio "", para la variable "Genus"
+Phylo_P <- subset_taxa(merged_metagenomes, Phylum != "")
+Phylo_G <- subset_taxa(merged_metagenomes, Genus != "")
+# Resumen
+summary(Phylo_P@tax_table@.Data== "") # Ya no hay ninguno
+summary(Phylo_G@tax_table@.Data== "") # Ya no hay ninguno
 ```
 
-### Datos Absolutos_S y Relativos_S
+Para finalizar esta sección, un par de funciones muy útiles en phyloseq son `tax_glom()` y `tip_glom()`. Ambas funciones tratan de agrupar o aglomerar un objeto de acuerdo a alguna propiedad, de esta manera simplificándolo. Por ejemplo, es muy probable que uno tenga varias ASVs del mismo género ya que si bien a nivel de secuencia son diferentes, estas corresponden al mismo género.
+Para hacer visualizaciones y otros análisis puede ser conveniente colapsar o aglomerar estas secuencias del mismo género u otro rango taxonómico. Al mismo tiempo, `tip_glom()` realiza una función similar pero basándose en una “altura” arbitraria en el árbol filogenético.
 
-Generamos una tabla de datos Absolutos_S y Relativos_S a nivel de "Phylum", para posteriores análisis.
+```{r}
+# Cortamos a cierto nivel taxonómico
+Phylum <- tax_glom(physeq = Phylo_P, taxrank = 'Phylum', NArm = F)
+Genus <- tax_glom(physeq = Phylo_G, taxrank = 'Genus', NArm = F)
+```
+
+### Datos absolutos y relativos
+
+Generamos una tabla de datos absolutos y relativos a nivel de "Phylum", para posteriores análisis.
 
 ```{r, message = FALSE, warning = FALSE}
-Relativos_S <- transform_sample_counts(merged_metagenomes, function(x) x*100 / sum(x))
-# Valores Relativos_S
-Glom_Rel_S <- tax_glom(physeq = Relativos_S, taxrank = 'Phylum')
+# Transformamos a valores relativos
+Phylum_R <- transform_sample_counts(Phylum, function(x) x*100 / sum(x))
+Genus_R <- transform_sample_counts(Genus, function(x) x*100 / sum(x))
+
 # psmelt permite generar un data.frame a partir de un objeto de phyloseq
-Relativos_S <- psmelt(Glom_Rel_S)
-# Valores Absolutos_S
-Glom_Abs_S <- tax_glom(physeq = merged_metagenomes, taxrank = "Phylum")
-Absolutos_S <- psmelt(Glom_Abs_S)
+# DataFrame Absolutos
+Phylum_A_DF <- psmelt(Phylum)
+Genus_A_DF <- psmelt(Genus)
+# Convertimos a tipo letra
+Phylum_A_DF$Phylum <- as.character(Phylum_A_DF$Phylum) 
+Genus_A_DF$Genus <- as.character(Genus_A_DF$Genus)
+Genus_A_DF$Family <- as.character(Genus_A_DF$Family)
+# Renombramos
+Phylum_A_DF$Phylum[Phylum_A_DF$Abundance < 1000] <- "Phylum < 1000 abundance"
+Genus_A_DF$Phylum[Genus_A_DF$Abundance < 1000] <- "Phylum < 1000 abundance"
+Genus_A_DF$Family[Genus_A_DF$Abundance < 5000] <- "Family < 5000 abundance"
+Genus_A_DF$Genus[Genus_A_DF$Abundance < 10000] <- "Genus < 10000 abundance"
+# Quitamos 
+Phylum_A_DF <- filter(Phylum_A_DF, Phylum_A_DF$Phylum != "Phylum < 1000 abundance") 
+Genus_A_DF <- filter(Genus_A_DF, Genus_A_DF$Phylum != "Phylum < 1000 abundance")
+Genus_A_DF <- filter(Genus_A_DF, Genus_A_DF$Family != "Family < 5000 abundance")
+Genus_A_DF <- filter(Genus_A_DF, Genus_A_DF$Genus != "Genus < 10000 abundance")
+
+# DataFrame Relativos
+Phylum_R_DF <- psmelt(Phylum_R)
+Genus_R_DF <- psmelt(Genus_R)
+# Convertimos a tipo letra
+Phylum_R_DF$Phylum <- as.character(Phylum_R_DF$Phylum) 
+Genus_R_DF$Genus <- as.character(Genus_R_DF$Genus)
+Genus_R_DF$Family <- as.character(Genus_R_DF$Family)
+# Renombramos
+Phylum_R_DF$Phylum[Phylum_R_DF$Abundance < 0.10] <- "Phylum < 0.10% abundance"
+Genus_R_DF$Phylum[Genus_R_DF$Abundance < 0.10] <- "Phylum < 0.10% abundance"
+Genus_R_DF$Family[Genus_R_DF$Abundance < 0.50] <- "Family < 0.50% abundance"
+Genus_R_DF$Genus[Genus_R_DF$Abundance < 0.50] <- "Genus < 0.50% abundance"
+# Quitamos 
+Phylum_R_DF <- filter(Phylum_R_DF, Phylum_R_DF$Phylum != "Phylum < 0.10% abundance")
+Genus_R_DF <- filter(Genus_R_DF, Genus_R_DF$Phylum != "Phylum < 0.10% abundance")
+Genus_R_DF <- filter(Genus_R_DF, Genus_R_DF$Family != "Phylum < 0.50% abundance")
+Genus_R_DF <- filter(Genus_R_DF, Genus_R_DF$Genus != "Phylum < 0.50% abundance")
 ```
 
-#### Gráficas de valores Absolutos_S y Relativos_S
+#### Gráficas de valores absolutos y relativos
 
 En eje X usamos la variable "SITE_ID", y en Y es "Abundance" y rellenamos por "Phylum"
 
 ```{r, include = TRUE, echo = TRUE, fig.pos = 'H', fig.dim = c(12,8), fig.align = "center", message=FALSE, fig.cap = 'Abundancia absoluta y relativa a nivel de *Phylum*.'}
-Abs.plot <- ggplot(data=Absolutos_S, aes(x=SITE_ID, y=Abundance, fill=Phylum)) + 
-  geom_bar(aes(), stat="identity", position="stack") + 
+Abs.plot.P <- ggplot(data = Phylum_A_DF, aes(x = SITE_ID, y = Abundance, fill = Phylum)) + 
+  geom_bar(aes(), stat = "identity", position = "stack") + 
   theme_classic() +
-  labs(x="Samples", y="Absolute abundance",
+  labs(x = "Samples", y = "Absolute abundance",
        title = "Absolute abundance of analyzed samples") +
   theme(legend.position = "right", 
-        legend.text = element_text(size=12, face="bold"),
+        legend.text = element_text(size = 12, face = "bold"),
         legend.title = element_text(size = 12, face = "bold"),
         axis.text = element_text(color = "black", size = 12, face = "bold"),
         axis.title = element_text(color = "black", size = 12, face = "bold"),
-        plot.title = element_text(hjust = 0.5, size=14, face="bold"))
+        plot.title = element_text(hjust = 0.5, size = 14, face = "bold"))
+Abs.plot.P
 
-Rel.plot <- ggplot(data=Relativos_S, aes(x=SITE_ID, y=Abundance, fill=Phylum)) + 
-  geom_bar(aes(), stat="identity", position="fill") + 
+Rel.plot.P <- ggplot(data = Phylum_R_DF, aes(x = SITE_ID, y = Abundance, fill = Phylum)) + 
+  geom_bar(aes(), stat = "identity", position = "fill") + 
   theme_classic() +
-  labs(x="Samples", y="Relative abundance",
+  labs(x = "Samples", y = "Relative abundance",
        title = "Relative abundance of analyzed samples") +
   theme(legend.position = "right", 
-        legend.text = element_text(size=12, face="bold"),
+        legend.text = element_text(size = 12, face = "bold"),
         legend.title = element_text(size = 12, face = "bold"),
         axis.text = element_text(color = "black", size = 12, face = "bold"),
         axis.title = element_text(color = "black", size = 12, face = "bold"),
-        plot.title = element_text(hjust = 0.5, size=14, face="bold"))
+        plot.title = element_text(hjust = 0.5, size = 14, face = "bold"))
+Rel.plot.P
 
-Abs.plot | Rel.plot
+Abs.plot.P | Rel.plot.P
 
-pdf("Resultados/Abundancias/PlotRaw.pdf", width=10, height=7)
-Abs.plot
+pdf("Resultados/Abundancias/PlotRawPhylum.pdf", width=10, height=7)
+Abs.plot.P
 dev.off()
-svg("Resultados/Abundancias/PlotRaw.svg", width=10, height=7)
-Abs.plot
+svg("Resultados/Abundancias/PlotRawPhylum.svg", width=10, height=7)
+Abs.plot.P
 dev.off()
-pdf("Resultados/Abundancias/PlotRel.pdf", width=10, height=7)
-Rel.plot
+pdf("Resultados/Abundancias/PlotRelPhylum.pdf", width=10, height=7)
+Rel.plot.P
 dev.off()
-svg("Resultados/Abundancias/PlotRel.svg", width=10, height=7)
-Rel.plot
+svg("Resultados/Abundancias/PlotRelPhylum.svg", width=10, height=7)
+Rel.plot.P
 dev.off()
-pdf("Resultados/Abundancias/PlotRaw-Rel.pdf", width=15, height=7)
-Abs.plot | Rel.plot
+pdf("Resultados/Abundancias/PlotRaw-RelPhylum.pdf", width=15, height=7)
+Abs.plot.P | Rel.plot.P
 dev.off()
-svg("Resultados/Abundancias/PlotRaw-Rel.svg", width=15, height=7)
-Abs.plot | Rel.plot
+svg("Resultados/Abundancias/PlotRaw-RelPhylum.svg", width=15, height=7)
+Abs.plot.P | Rel.plot.P
 dev.off()
-```
 
-Podemos hacerlo para las diferentes variables en X, Y y fill
+###
 
-```{r}
-names(Relativos_S)
-names(Absolutos_S)
-```
-
-Renombramos aquellos "Phylum" que presenten una abundancia menor a 1 %.
-
-```{r}
-Relativos_S$Phylum <- as.character(Relativos_S$Phylum) # Primero lo convertimos a letra
-Relativos_S$Phylum[Relativos_S$Abundance < 1.0] <- "Phylum < 1.0% abund." # Renombramos
-unique(Relativos_S$Phylum)
-```
-
-Volvemos a graficar usando ese filtro de "Phylum < 1.0% abund."
-
-```{r, include = TRUE, echo = TRUE, fig.pos = 'H', fig.dim = c(12,8), fig.align = "center", message=FALSE, fig.cap = 'Abundancia absoluta y relativa a nivel de *Phylum*. con Phylum < 1.0 % abundancia.'}
-Rel.plot2 <- ggplot(data=Relativos_S, aes(x=SITE_ID, y=Abundance, fill=Phylum)) + 
-  geom_bar(aes(), stat="identity", position="fill") + 
+Abs.plot.P2 <- ggplot(data = Genus_A_DF, aes(x = SITE_ID, y = Abundance, fill = Phylum)) + 
+  geom_bar(aes(), stat = "identity", position = "stack") + 
   theme_classic() +
-  labs(x="Samples", y="Relative abundance",
+  labs(x = "Samples", y = "Absolute abundance",
+       title = "Absolute abundance of analyzed samples") +
+  theme(legend.position = "right", 
+        legend.text = element_text(size = 12, face = "bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        axis.text = element_text(color = "black", size = 12, face = "bold"),
+        axis.title = element_text(color = "black", size = 12, face = "bold"),
+        plot.title = element_text(hjust = 0.5, size = 14, face = "bold"))
+Abs.plot.P2
+
+Rel.plot.P2 <- ggplot(data = Genus_R_DF, aes(x = SITE_ID, y = Abundance, fill = Phylum)) + 
+  geom_bar(aes(), stat = "identity", position = "fill") + 
+  theme_classic() +
+  labs(x = "Samples", y = "Relative abundance",
        title = "Relative abundance of analyzed samples") +
   theme(legend.position = "right", 
-        legend.text = element_text(size=12, face="bold"),
+        legend.text = element_text(size = 12, face = "bold"),
         legend.title = element_text(size = 12, face = "bold"),
         axis.text = element_text(color = "black", size = 12, face = "bold"),
         axis.title = element_text(color = "black", size = 12, face = "bold"),
-        plot.title = element_text(hjust = 0.5, size=14, face="bold"))
+        plot.title = element_text(hjust = 0.5, size = 14, face = "bold"))
+Rel.plot.P2
 
-Abs.plot | Rel.plot2
+Abs.plot.P2 | Rel.plot.P2
 
-pdf("Resultados/Abundancias/PlotRel2.pdf", width=10, height=7)
-Rel.plot2
+pdf("Resultados/Abundancias/PlotRawPhylum2.pdf", width=10, height=7)
+Abs.plot.P2
 dev.off()
-svg("Resultados/Abundancias/PlotRel2.svg", width=10, height=7)
-Rel.plot2
+svg("Resultados/Abundancias/PlotRawPhylum2.svg", width=10, height=7)
+Abs.plot.P2
 dev.off()
-pdf("Resultados/Abundancias/PlotRaw-Rel2.pdf", width=15, height=7)
-Abs.plot | Rel.plot2
+pdf("Resultados/Abundancias/PlotRelPhylum2.pdf", width=10, height=7)
+Rel.plot.P2
 dev.off()
-svg("Resultados/Abundancias/PlotRaw-Rel2.svg", width=15, height=7)
-Abs.plot | Rel.plot2
+svg("Resultados/Abundancias/PlotRelPhylum2.svg", width=10, height=7)
+Rel.plot.P2
+dev.off()
+pdf("Resultados/Abundancias/PlotRaw-RelPhylum2.pdf", width=15, height=7)
+Abs.plot.P2 | Rel.plot.P2
+dev.off()
+svg("Resultados/Abundancias/PlotRaw-RelPhylum2.svg", width=15, height=7)
+Abs.plot.P2 | Rel.plot.P2
+dev.off()
+```
+
+En eje X usamos la variable "SITE_ID", y en Y es "Abundance" y rellenamos por "Family"
+
+```{r, include = TRUE, echo = TRUE, fig.pos = 'H', fig.dim = c(12,8), fig.align = "center", message=FALSE, fig.cap = 'Abundancia absoluta y relativa a nivel de *Family*.'}
+Abs.plot.F <- ggplot(data = Genus_A_DF, aes(x = SITE_ID, y = Abundance, fill = Family)) + 
+  geom_bar(aes(), stat = "identity", position = "stack") + 
+  theme_classic() +
+  labs(x = "Samples", y = "Absolute abundance",
+       title = "Absolute abundance of analyzed samples") +
+  theme(legend.position = "right", 
+        legend.text = element_text(size = 12, face = "bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        axis.text = element_text(color = "black", size = 12, face = "bold"),
+        axis.title = element_text(color = "black", size = 12, face = "bold"),
+        plot.title = element_text(hjust = 0.5, size = 14, face = "bold"))
+Abs.plot.F 
+
+Rel.plot.F <- ggplot(data = Genus_R_DF, aes(x = SITE_ID, y = Abundance, fill = Family)) + 
+  geom_bar(aes(), stat = "identity", position = "fill") + 
+  theme_classic() +
+  labs(x = "Samples", y = "Relative abundance",
+       title = "Relative abundance of analyzed samples") +
+  theme(legend.position = "right", 
+        legend.text = element_text(size = 12, face = "bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        axis.text = element_text(color = "black", size = 12, face = "bold"),
+        axis.title = element_text(color = "black", size = 12, face = "bold"),
+        plot.title = element_text(hjust = 0.5, size = 14, face = "bold"))
+Rel.plot.F
+
+Abs.plot.F | Rel.plot.F
+
+pdf("Resultados/Abundancias/PlotRawFamily.pdf", width=10, height=7)
+Abs.plot.F
+dev.off()
+svg("Resultados/Abundancias/PlotRawFamily.svg", width=10, height=7)
+Abs.plot.F
+dev.off()
+pdf("Resultados/Abundancias/PlotRelFamily.pdf", width=10, height=7)
+Rel.plot.F
+dev.off()
+svg("Resultados/Abundancias/PlotRelFamily.svg", width=10, height=7)
+Rel.plot.F
+dev.off()
+pdf("Resultados/Abundancias/PlotRaw-RelFamily.pdf", width=15, height=7)
+Abs.plot.F | Rel.plot.F
+dev.off()
+svg("Resultados/Abundancias/PlotRaw-RelFamily.svg", width=15, height=7)
+Abs.plot.F | Rel.plot.F
+dev.off()
+```
+
+En eje X usamos la variable "SITE_ID", y en Y es "Abundance" y rellenamos por "Genus"
+
+```{r, include = TRUE, echo = TRUE, fig.pos = 'H', fig.dim = c(12,8), fig.align = "center", message=FALSE, fig.cap = 'Abundancia absoluta y relativa a nivel de *Genus*.'}
+Abs.plot.G <- ggplot(data = Genus_A_DF, aes(x = SITE_ID, y = Abundance, fill = Genus)) + 
+  geom_bar(aes(), stat = "identity", position = "stack") + 
+  theme_classic() +
+  labs(x = "Samples", y = "Absolute abundance",
+       title = "Absolute abundance of analyzed samples") +
+  theme(legend.position = "right", 
+        legend.text = element_text(size = 12, face = "bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        axis.text = element_text(color = "black", size = 12, face = "bold"),
+        axis.title = element_text(color = "black", size = 12, face = "bold"),
+        plot.title = element_text(hjust = 0.5, size = 14, face = "bold"))
+Abs.plot.G
+
+Rel.plot.G <- ggplot(data = Genus_R_DF, aes(x = SITE_ID, y = Abundance, fill = Genus)) + 
+  geom_bar(aes(), stat = "identity", position = "fill") + 
+  theme_classic() +
+  labs(x = "Samples", y = "Relative abundance",
+       title = "Relative abundance of analyzed samples") +
+  theme(legend.position = "right", 
+        legend.text = element_text(size = 12, face = "bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        axis.text = element_text(color = "black", size = 12, face = "bold"),
+        axis.title = element_text(color = "black", size = 12, face = "bold"),
+        plot.title = element_text(hjust = 0.5, size = 14, face = "bold"))
+Rel.plot.G
+
+Abs.plot.G | Rel.plot.G
+
+pdf("Resultados/Abundancias/PlotRawGenus.pdf", width=10, height=7)
+Abs.plot.G
+dev.off()
+svg("Resultados/Abundancias/PlotRawGenus.svg", width=10, height=7)
+Abs.plot.G
+dev.off()
+pdf("Resultados/Abundancias/PlotRelGenus.pdf", width=10, height=7)
+Rel.plot.G
+dev.off()
+svg("Resultados/Abundancias/PlotRelGenus.svg", width=10, height=7)
+Rel.plot.G
+dev.off()
+pdf("Resultados/Abundancias/PlotRaw-RelGenus.pdf", width=15, height=7)
+Abs.plot.G | Rel.plot.G
+dev.off()
+svg("Resultados/Abundancias/PlotRaw-RelGenus.svg", width=15, height=7)
+Abs.plot.G | Rel.plot.G
 dev.off()
 ```
 
@@ -446,14 +600,14 @@ plot.reads
 dev.off()
 ```
 
-Nos quedamos con el nombre de aquellos Phylum con procentaje mayor a 1
+Nos quedamos con el nombre de aquellos Phylum con procentaje mayor a 0.1
 
 ```{r}
-OnePercentage <- unique(Relativos_S$Phylum[Relativos_S$Abundance > 1.0])
+OnePercentage <- unique(Genus_R_DF$Phylum[Genus_R_DF$Abundance > 0.1])
 OnePercentage
 ```
 
-Abundancias a nivel de Phylum nuevamente para los de abundancia mayor al 1 %
+Abundancias a nivel de Phylum nuevamente para los de abundancia mayor al 0.1 %
 
 ```{r, include = TRUE, echo = TRUE, fig.pos = 'H', fig.dim = c(12,8), fig.align = "center", message=FALSE, fig.cap = 'Abundancia relativa de todos los *Phylum* presentes en mayor a 1 % de Abundancia.'}
 for (i in OnePercentage){
@@ -504,7 +658,7 @@ En el contexto metagenómico, medimos diversidad alfa  $\alpha$ usando una serie
 En phyloseq simplemente llamamos la función plot_richness y podemos visualizar las medidas de diversidad. 
 
 ```{r, include = TRUE, echo = TRUE, fig.pos = 'H', fig.dim = c(12,8), fig.align = "center", message=FALSE, fig.cap = 'Índices de diversidad alpha $\alpha$.'}
-alfa.diver <- plot_richness(physeq = merged_metagenomes, 
+alfa.diver <- plot_richness(physeq = Phylo_P, 
               color =  "SITE_ID",
               x = "SITE_ID",
               measures = c("Observed", "Chao1", "ACE", "Shannon", "Simpson", "Fisher"),
@@ -527,7 +681,6 @@ svg("Resultados/PlotAlfa.svg", width=20, height=10)
 alfa.diver
 dev.off()
 ```
-
 
 El paquete microbiome ofrece otras herramientas para evaluar diversidad que son accesibles fácilmente a través de su función global.
 
@@ -646,7 +799,7 @@ for (o in Ordenacion){
       # d <- "bray"
       Ord <- ordinate(physeq = merged_metagenomes, method = o, distance = d)
       Beta <- plot_ordination(physeq = merged_metagenomes, ordination = Ord, 
-                              color = "SITE_ID", shape = "YEAR") +
+                              color = "SITE_ID", shape = "SITE_ID") +
         theme_classic() +
         geom_point(size = 5) +
         geom_text(mapping = aes(label = SITE_ID), size = 4, vjust = 2, hjust = 1) + 
@@ -1033,6 +1186,7 @@ Para obtener los taxones dominantes, solo mantendremos las OTU cuyas lecturas se
 Es necesario que nuestro objeto phyloseq contenga la tabla de "**otu_table**" la siguiente estructura 
 - Filas con OTUs 
 - Columnas con Muestras
+
 ```{r, message = FALSE, warning = FALSE}
 head(merged_metagenomes@otu_table@.Data) # Ya está como la queremos
 summary(merged_metagenomes@otu_table@.Data) # Resumen estadístico
@@ -1046,16 +1200,16 @@ merged_metagenomes2 <- tax_glom(merged_metagenomes,taxrank = rank_names(merged_m
 summary(merged_metagenomes2@otu_table@.Data)
 ```
 
-De aquí en adelante, trabajamos con valores Relativos_S y con valores Absolutos_S
+De aquí en adelante, trabajamos con valores Relativos y con valores Absolutos
 ```{r, message = FALSE, warning = FALSE}
-# Absolutos_S
+# Absolutos
 # Filtramos aquellos géneros que tienen una media mínima de 100 lecturas absolutas
 psd.abs.100 <- filter_taxa(merged_metagenomes2, function(x) mean(x) > 10000.0, TRUE)
 
-# Relativos_S
+# Relativos
 psd.rel <- transform_sample_counts(merged_metagenomes2, function(x) x*100 / sum(x))
 # Filtramos aquellos géneros que tiene al menos un 1 % de lecturas relativas 
-psd.rel.1 <- filter_taxa(psd.rel, function(x) mean(x) > 1.0, TRUE)
+psd.rel.1 <- filter_taxa(psd.rel, function(x) mean(x) > 0.5, TRUE)
 ```
 
 El paquete pheatmap necesista un dataframe como entrada, asi que haremos unos desde el objeto phyloseq
@@ -1139,81 +1293,261 @@ dev.off()
 
 # Otros gráficos
 
-Vamos a crear un data.frame con el que trabajaremos
+Comenzamos desde el objeto merged_metagenomes
 
 ```{r, message = FALSE, warning = FALSE}
-# Cortamos y agrupamos a nivel de género
-Genero <- tax_glom(merged_metagenomes, taxrank = 'Genus')
+#Con esto nos dice cuántos datos vacios hay, en este caso serán todos aquellos que aparezcan como TRUE
+summary(merged_metagenomes@tax_table@.Data== "") # Hay 1337 NAs
+# Generamos un objeto `merged_metagenomes` sin taxa´s que tengan 0 reads
+merged_metagenomes <- prune_taxa(taxa_sums(merged_metagenomes) > 0, merged_metagenomes)
+# Actualizamos la variable merged_metagenomes indicando que se incluya todo lo diferente (!=) a vacio "", para la variable "Genus"
+Phylo_P <- subset_taxa(merged_metagenomes, Phylum != "")
+Phylo_G <- subset_taxa(merged_metagenomes, Genus != "")
+# Resumen
+summary(Phylo_P@tax_table@.Data== "") # Ya no hay ninguno
+summary(Phylo_G@tax_table@.Data== "") # Ya no hay ninguno
+# Cortamos a cierto nivel taxonómico
+Phylum <- tax_glom(physeq = Phylo_P, taxrank = 'Phylum', NArm = F)
+Genus <- tax_glom(physeq = Phylo_G, taxrank = 'Genus', NArm = F)
+# Transformamos a valores relativos
+Phylum_R <- transform_sample_counts(Phylum, function(x) x*100 / sum(x))
+Genus_R <- transform_sample_counts(Genus, function(x) x*100 / sum(x))
 
-# Absolutos_S
-# Generamos el data.frame
-V.Absolutos_S <- psmelt(Genero)
-str(V.Absolutos_S)
+# psmelt permite generar un data.frame a partir de un objeto de phyloseq
+# DataFrame Absolutos
+Phylum_A_DF <- psmelt(Phylum)
+Genus_A_DF <- psmelt(Genus)
+# Convertimos a tipo letra
+Phylum_A_DF$Phylum <- as.character(Phylum_A_DF$Phylum) 
+Genus_A_DF$Genus <- as.character(Genus_A_DF$Genus)
+Genus_A_DF$Family <- as.character(Genus_A_DF$Family)
+# Renombramos
+Phylum_A_DF$Phylum[Phylum_A_DF$Abundance < 1000] <- "Phylum < 1000 abundance"
+Genus_A_DF$Phylum[Genus_A_DF$Abundance < 1000] <- "Phylum < 1000 abundance"
+Genus_A_DF$Family[Genus_A_DF$Abundance < 5000] <- "Family < 5000 abundance"
+Genus_A_DF$Genus[Genus_A_DF$Abundance < 10000] <- "Genus < 10000 abundance"
+# Quitamos 
+Phylum_A_DF <- filter(Phylum_A_DF, Phylum_A_DF$Phylum != "Phylum < 1000 abundance") 
+Genus_A_DF <- filter(Genus_A_DF, Genus_A_DF$Phylum != "Phylum < 1000 abundance")
+Genus_A_DF <- filter(Genus_A_DF, Genus_A_DF$Family != "Family < 5000 abundance")
+Genus_A_DF <- filter(Genus_A_DF, Genus_A_DF$Genus != "Genus < 10000 abundance")
 
-# Relativos_S
-# Conversión de valores Absolutos_S a Relativos_S
-Transfomacion <- transform_sample_counts(Genero, function(x) x*100 / sum(x))
-# Generamos el data.frame
-V.Relativos_S <- psmelt(Transfomacion)
-str(V.Relativos_S)
-# Renombramos géneros, phylum y familias que tengan menor al 1 %
-V.Relativos_S$Genus[V.Relativos_S$Abundance < 1.0] <- "Genus < 1.0 % abund."
-V.Relativos_S$Family[V.Relativos_S$Abundance < 1.0] <- "Family < 1.0 % abund."
-V.Relativos_S$Phylum[V.Relativos_S$Abundance < 1.0] <- "Phyla < 1.0 % abund."
+# DataFrame Relativos
+Phylum_R_DF <- psmelt(Phylum_R)
+Genus_R_DF <- psmelt(Genus_R)
+# Convertimos a tipo letra
+Phylum_R_DF$Phylum <- as.character(Phylum_R_DF$Phylum) 
+Genus_R_DF$Genus <- as.character(Genus_R_DF$Genus)
+Genus_R_DF$Family <- as.character(Genus_R_DF$Family)
+# Renombramos
+Phylum_R_DF$Phylum[Phylum_R_DF$Abundance < 0.10] <- "Phylum < 0.10% abundance"
+Genus_R_DF$Phylum[Genus_R_DF$Abundance < 0.10] <- "Phylum < 0.10% abundance"
+Genus_R_DF$Family[Genus_R_DF$Abundance < 0.50] <- "Family < 0.50% abundance"
+Genus_R_DF$Genus[Genus_R_DF$Abundance < 0.50] <- "Genus < 0.50% abundance"
+# Quitamos 
+Phylum_R_DF <- filter(Phylum_R_DF, Phylum_R_DF$Phylum != "Phylum < 0.10% abundance")
+Genus_R_DF <- filter(Genus_R_DF, Genus_R_DF$Phylum != "Phylum < 0.10% abundance")
+Genus_R_DF <- filter(Genus_R_DF, Genus_R_DF$Family != "Phylum < 0.50% abundance")
+Genus_R_DF <- filter(Genus_R_DF, Genus_R_DF$Genus != "Phylum < 0.50% abundance")
 ```
 
 Graficamos la abundancia a diferente nivel taxonómico
 
-```{r, include = TRUE, echo = TRUE, fig.pos = 'H', fig.dim = c(12,8), fig.align = "center", message=FALSE, fig.cap = 'Gráficos de abundancia a diferentes niveles taxonómicos.'}
-Taxon <- c("Family", "Phylum")
-# Ciclo
-for (t in Taxon){
-  # Prueba
-  # t <- c("Family")
-  # Absoluto
-  plot.a <- ggplot(data = V.Absolutos_S, aes(x = V.Relativos_S[,t], y = Abundance, 
-                                           fill = SITE_ID)) +
-  geom_bar(aes(), stat = "identity", position = "stack") + 
+```{r, include = TRUE, echo = TRUE, fig.pos = 'H', fig.dim = c(12,8), fig.align = "center", message=FALSE, fig.cap = 'Gráficos de abundancia a nivel taxonómico *Phylum*.'}
+Taxon <- c("Phylum")
+# Absoluto
+plot.a <- ggplot(data = Genus_A_DF, aes(x = SITE_ID, y = Abundance, fill = SITE_ID)) +
+  # geom_bar(aes(), stat = "identity", position = "stack") + 
+  geom_boxplot() +
   theme_classic() +
-  labs(x="Phylum", y="Absolute abundance",
+  labs(x = "Site", y = "Absolute abundance",
        title = "Absolute abundance of analyzed samples") +
   theme(legend.position = "right", 
         legend.text = element_text(size=12, face="bold"),
         legend.title = element_text(size = 12, face = "bold"),
         axis.text = element_text(color = "black", size = 12, face = "bold"),
         axis.title = element_text(color = "black", size = 12, face = "bold"),
-        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
-        plot.title = element_text(hjust = 0.5, size=14, face="bold"))
-  print(plot.a)
-  pdf(paste0("Resultados/PlotAbunAbs",t,".pdf"), width=20, height=10)
-  print(plot.a)
-  dev.off()
-  svg(paste0("Resultados/PlotAbunAbs",t,".svg"), width=20, height=10)
-  print(plot.a)
-  dev.off()
-  # Relativo
-  plot.r <- ggplot(data = V.Relativos_S, aes(x = V.Relativos_S[,t], y = Abundance, 
-                                           fill = SITE_ID)) + 
-    geom_bar(aes(), stat = "identity", position = "fill") + 
-    theme_classic() + 
-    labs(x="Phylum", y="Relative abundance",
-         title = "Relative abundance of analyzed samples") +
-    theme(legend.position = "right", 
-      legend.text = element_text(size=12, face="bold"),
-      legend.title = element_text(size = 12, face = "bold"),
-      axis.text = element_text(color = "black", size = 12, face = "bold"),
-      axis.title = element_text(color = "black", size = 12, face = "bold"),
-      axis.text.x = element_text(angle = 90, vjust = 0.5, hjust=1),
-      plot.title = element_text(hjust = 0.5, size=14, face="bold"))
-  print(plot.r)
-  pdf(paste0("Resultados/PlotAbunRel",t,".pdf"), width=20, height=10)
-  print(plot.r)
-  dev.off()
-  svg(paste0("Resultados/PlotAbunRel",t,".svg"), width=20, height=10)
-  print(plot.r)
-  dev.off()
-}
+        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+        plot.title = element_text(hjust = 0.5, size = 14, face = "bold"))+
+  facet_grid(. ~ Genus_A_DF[,Taxon])
+print(plot.a)
+pdf(paste0("Resultados/PlotAbunAbs", Taxon, ".pdf"), width=20, height=10)
+print(plot.a)
+dev.off()
+svg(paste0("Resultados/PlotAbunAbs", Taxon, ".svg"), width=20, height=10)
+print(plot.a)
+dev.off()
+# Relativo
+plot.r <- ggplot(data = Genus_R_DF, aes(x = SITE_ID, y = Abundance, fill = SITE_ID)) + 
+  # geom_bar(stat = "identity", position = "stack") + 
+  # geom_bar(stat = "identity", position = "dodge") +
+  geom_boxplot() +
+  theme_classic() + 
+  labs(x = "Site", y = "Relative abundance",
+       title = "Relative abundance of analyzed samples") +
+  theme(legend.position = "right", 
+    legend.text = element_text(size=12, face="bold"),
+    legend.title = element_text(size = 12, face = "bold"),
+    axis.text = element_text(color = "black", size = 12, face = "bold"),
+    axis.title = element_text(color = "black", size = 12, face = "bold"),
+    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold")) +
+  facet_grid(. ~ Genus_R_DF[,Taxon])
+  # facet_grid(. ~ SITE_ID)
+print(plot.r)
+pdf(paste0("Resultados/PlotAbunRel", Taxon, ".pdf"), width=20, height=10)
+print(plot.r)
+dev.off()
+svg(paste0("Resultados/PlotAbunRel", Taxon, ".svg"), width=20, height=10)
+print(plot.r)
+dev.off()
+###
+# Absoluto
+plot.a2 <- ggplot(data = Phylum_A_DF, aes(x = SITE_ID, y = Abundance, fill = SITE_ID)) +
+  # geom_bar(aes(), stat = "identity", position = "stack") + 
+  geom_boxplot() +
+  theme_classic() +
+  labs(x = "Site", y = "Absolute abundance",
+       title = "Absolute abundance of analyzed samples") +
+  theme(legend.position = "right", 
+        legend.text = element_text(size=12, face="bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        axis.text = element_text(color = "black", size = 12, face = "bold"),
+        axis.title = element_text(color = "black", size = 12, face = "bold"),
+        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+        plot.title = element_text(hjust = 0.5, size = 14, face = "bold"))+
+  facet_grid(. ~ Phylum_A_DF[,Taxon])
+print(plot.a2)
+pdf(paste0("Resultados/PlotAbunAbs", Taxon, "v2.pdf"), width=20, height=10)
+print(plot.a2)
+dev.off()
+svg(paste0("Resultados/PlotAbunAbs", Taxon, "v2.svg"), width=20, height=10)
+print(plot.a2)
+dev.off()
+# Relativo
+plot.r2 <- ggplot(data = Phylum_R_DF, aes(x = SITE_ID, y = Abundance, fill = SITE_ID)) + 
+  # geom_bar(aes(), stat = "identity", position = "fill") + 
+  geom_boxplot() +
+  theme_classic() + 
+  labs(x = "Site", y = "Relative abundance",
+       title = "Relative abundance of analyzed samples") +
+  theme(legend.position = "right", 
+    legend.text = element_text(size=12, face="bold"),
+    legend.title = element_text(size = 12, face = "bold"),
+    axis.text = element_text(color = "black", size = 12, face = "bold"),
+    axis.title = element_text(color = "black", size = 12, face = "bold"),
+    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold")) +
+  facet_grid(. ~ Phylum_R_DF[,Taxon])
+print(plot.r2)
+pdf(paste0("Resultados/PlotAbunRel", Taxon, "v2.pdf"), width=20, height=10)
+print(plot.r2)
+dev.off()
+svg(paste0("Resultados/PlotAbunRel", Taxon, "v2.svg"), width=20, height=10)
+print(plot.r2)
+dev.off()
 ```
+
+
+```{r, include = TRUE, echo = TRUE, fig.pos = 'H', fig.dim = c(12,8), fig.align = "center", message=FALSE, fig.cap = 'Gráficos de abundancia a nivel taxonómico *Family*.'}
+Taxon <- c("Family")
+# Absoluto
+plot.a3 <- ggplot(data = Genus_A_DF, aes(x = SITE_ID, y = Abundance, fill = SITE_ID)) +
+  # geom_bar(aes(), stat = "identity", position = "stack") + 
+  geom_boxplot() +
+  theme_classic() +
+  labs(x = "Site", y = "Absolute abundance",
+       title = "Absolute abundance of analyzed samples") +
+  theme(legend.position = "right", 
+        legend.text = element_text(size=12, face="bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        axis.text = element_text(color = "black", size = 12, face = "bold"),
+        axis.title = element_text(color = "black", size = 12, face = "bold"),
+        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+        plot.title = element_text(hjust = 0.5, size = 14, face = "bold"))+
+  facet_grid(. ~ Genus_A_DF[,Taxon])
+print(plot.a3)
+pdf(paste0("Resultados/PlotAbunAbs", Taxon, ".pdf"), width=20, height=10)
+print(plot.a3)
+dev.off()
+svg(paste0("Resultados/PlotAbunAbs", Taxon, ".svg"), width=20, height=10)
+print(plot.a3)
+dev.off()
+
+# Relativo
+plot.r3 <- ggplot(data = Genus_R_DF, aes(x = SITE_ID, y = Abundance, fill = SITE_ID)) + 
+  # geom_bar(aes(), stat = "identity", position = "fill") + 
+  geom_boxplot() +
+  theme_classic() + 
+  labs(x = "Site", y = "Relative abundance",
+       title = "Relative abundance of analyzed samples") +
+  theme(legend.position = "right", 
+    legend.text = element_text(size=12, face="bold"),
+    legend.title = element_text(size = 12, face = "bold"),
+    axis.text = element_text(color = "black", size = 12, face = "bold"),
+    axis.title = element_text(color = "black", size = 12, face = "bold"),
+    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold")) +
+  facet_grid(. ~ Genus_R_DF[,Taxon])
+print(plot.r3)
+pdf(paste0("Resultados/PlotAbunRel", Taxon, ".pdf"), width=20, height=10)
+print(plot.r3)
+dev.off()
+svg(paste0("Resultados/PlotAbunRel", Taxon, ".svg"), width=20, height=10)
+print(plot.r3)
+dev.off()
+```
+
+
+```{r, include = TRUE, echo = TRUE, fig.pos = 'H', fig.dim = c(12,8), fig.align = "center", message=FALSE, fig.cap = 'Gráficos de abundancia a nivel taxonómico *Genus*.'}
+Taxon <- c("Genus")
+# Absoluto
+plot.a4 <- ggplot(data = Genus_A_DF, aes(x = SITE_ID, y = Abundance, fill = SITE_ID)) +
+  # geom_bar(aes(), stat = "identity", position = "stack") + 
+  geom_boxplot() +
+  theme_classic() +
+  labs(x = "Site", y = "Absolute abundance",
+       title = "Absolute abundance of analyzed samples") +
+  theme(legend.position = "right", 
+        legend.text = element_text(size=12, face="bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        axis.text = element_text(color = "black", size = 12, face = "bold"),
+        axis.title = element_text(color = "black", size = 12, face = "bold"),
+        axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+        plot.title = element_text(hjust = 0.5, size = 14, face = "bold"))+
+  facet_grid(. ~ Genus_A_DF[,Taxon])
+print(plot.a4)
+pdf(paste0("Resultados/PlotAbunAbs", Taxon, ".pdf"), width=20, height=10)
+print(plot.a4)
+dev.off()
+svg(paste0("Resultados/PlotAbunAbs", Taxon, ".svg"), width=20, height=10)
+print(plot.a4)
+dev.off()
+
+# Relativo
+plot.r4 <- ggplot(data = Genus_R_DF, aes(x = SITE_ID, y = Abundance, fill = SITE_ID)) + 
+  # geom_bar(aes(), stat = "identity", position = "fill") + 
+  geom_boxplot() +
+  theme_classic() + 
+  labs(x = "Site", y = "Relative abundance",
+       title = "Relative abundance of analyzed samples") +
+  theme(legend.position = "right", 
+    legend.text = element_text(size=12, face="bold"),
+    legend.title = element_text(size = 12, face = "bold"),
+    axis.text = element_text(color = "black", size = 12, face = "bold"),
+    axis.title = element_text(color = "black", size = 12, face = "bold"),
+    axis.text.x = element_text(angle = 90, vjust = 0.5, hjust = 1),
+    plot.title = element_text(hjust = 0.5, size = 14, face = "bold")) +
+  facet_grid(. ~ Genus_R_DF[,Taxon])
+print(plot.r4)
+pdf(paste0("Resultados/PlotAbunRel", Taxon, ".pdf"), width=20, height=10)
+print(plot.r4)
+dev.off()
+svg(paste0("Resultados/PlotAbunRel", Taxon, ".svg"), width=20, height=10)
+print(plot.r4)
+dev.off()
+```
+
 
 # Análisis exploratorio de datos de microbiomas
 
@@ -1357,7 +1691,7 @@ xlab = "Samples",
 ylab = "Distance",
 sub = "",
 horiz = TRUE)+
-geom_hline(yintercept = 0.5, linetype = "dashed")
+geom_hline(yintercept = 0.05, linetype = "dashed")
 
 # Completa
 hc_complete <- hclust(d=bc_dist, method = "complete")
@@ -1367,7 +1701,7 @@ main = "",
 xlab = "Samples",
 ylab = "Distance",
 sub = "",horiz = TRUE)+
-geom_hline(yintercept = 0.55, linetype = "dashed")
+geom_hline(yintercept = 0.05, linetype = "dashed")
 
 # Ward
 hc_ward <- hclust(d=bc_dist, method = "ward.D2")
@@ -1378,7 +1712,7 @@ xlab = "Samples",
 ylab = "Distance",
 sub = "",
 horiz = TRUE)+
-geom_hline(yintercept = 0.55, linetype = "dashed")
+geom_hline(yintercept = 0.05, linetype = "dashed")
 
 # Promedio
 hc_average <- hclust(d=bc_dist, method = "average")
@@ -1389,7 +1723,7 @@ xlab = "Samples",
 ylab = "Distance",
 sub = "",
 horiz = TRUE) +
-geom_hline(yintercept = 0.55, linetype = "dashed")
+geom_hline(yintercept = 0.05, linetype = "dashed")
 ```
 
 # Ordenación
