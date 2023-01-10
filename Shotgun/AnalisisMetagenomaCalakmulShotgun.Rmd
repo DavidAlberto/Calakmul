@@ -353,15 +353,15 @@ Phylum_R_DF$Phylum <- as.character(Phylum_R_DF$Phylum)
 Genus_R_DF$Genus <- as.character(Genus_R_DF$Genus)
 Genus_R_DF$Family <- as.character(Genus_R_DF$Family)
 # Renombramos
-Phylum_R_DF$Phylum[Phylum_R_DF$Abundance < 0.10] <- "Phylum < 0.10% abundance"
-Genus_R_DF$Phylum[Genus_R_DF$Abundance < 0.10] <- "Phylum < 0.10% abundance"
-Genus_R_DF$Family[Genus_R_DF$Abundance < 0.50] <- "Family < 0.50% abundance"
-Genus_R_DF$Genus[Genus_R_DF$Abundance < 0.50] <- "Genus < 0.50% abundance"
+Phylum_R_DF$Phylum[Phylum_R_DF$Abundance < 0.10] <- "Phylum < 0.050% abundance"
+Genus_R_DF$Phylum[Genus_R_DF$Abundance < 0.10] <- "Phylum < 0.050% abundance"
+Genus_R_DF$Family[Genus_R_DF$Abundance < 0.50] <- "Family < 0.10% abundance"
+Genus_R_DF$Genus[Genus_R_DF$Abundance < 0.50] <- "Genus < 0.10% abundance"
 # Quitamos 
-Phylum_R_DF <- filter(Phylum_R_DF, Phylum_R_DF$Phylum != "Phylum < 0.10% abundance")
-Genus_R_DF <- filter(Genus_R_DF, Genus_R_DF$Phylum != "Phylum < 0.10% abundance")
-Genus_R_DF <- filter(Genus_R_DF, Genus_R_DF$Family != "Phylum < 0.50% abundance")
-Genus_R_DF <- filter(Genus_R_DF, Genus_R_DF$Genus != "Phylum < 0.50% abundance")
+Phylum_R_DF <- filter(Phylum_R_DF, Phylum_R_DF$Phylum != "Phylum < 0.050% abundance")
+Genus_R_DF <- filter(Genus_R_DF, Genus_R_DF$Phylum != "Phylum < 0.050% abundance")
+Genus_R_DF <- filter(Genus_R_DF, Genus_R_DF$Family != "Family < 0.10% abundance")
+Genus_R_DF <- filter(Genus_R_DF, Genus_R_DF$Genus != "Genus < 0.10% abundance")
 ```
 
 #### Gráficas de valores absolutos y relativos
@@ -603,7 +603,7 @@ dev.off()
 Nos quedamos con el nombre de aquellos Phylum con procentaje mayor a 0.1
 
 ```{r}
-OnePercentage <- unique(Genus_R_DF$Phylum[Genus_R_DF$Abundance > 0.1])
+OnePercentage <- unique(Genus_R_DF$Phylum[Genus_R_DF$Abundance > 0.10])
 OnePercentage
 ```
 
@@ -1324,13 +1324,13 @@ Genus_A_DF$Family <- as.character(Genus_A_DF$Family)
 # Renombramos
 Phylum_A_DF$Phylum[Phylum_A_DF$Abundance < 1000] <- "Phylum < 1000 abundance"
 Genus_A_DF$Phylum[Genus_A_DF$Abundance < 1000] <- "Phylum < 1000 abundance"
-Genus_A_DF$Family[Genus_A_DF$Abundance < 5000] <- "Family < 5000 abundance"
-Genus_A_DF$Genus[Genus_A_DF$Abundance < 10000] <- "Genus < 10000 abundance"
+Genus_A_DF$Family[Genus_A_DF$Abundance < 10000] <- "Family < 10000 abundance"
+Genus_A_DF$Genus[Genus_A_DF$Abundance < 15000] <- "Genus < 15000 abundance"
 # Quitamos 
 Phylum_A_DF <- filter(Phylum_A_DF, Phylum_A_DF$Phylum != "Phylum < 1000 abundance") 
 Genus_A_DF <- filter(Genus_A_DF, Genus_A_DF$Phylum != "Phylum < 1000 abundance")
-Genus_A_DF <- filter(Genus_A_DF, Genus_A_DF$Family != "Family < 5000 abundance")
-Genus_A_DF <- filter(Genus_A_DF, Genus_A_DF$Genus != "Genus < 10000 abundance")
+Genus_A_DF <- filter(Genus_A_DF, Genus_A_DF$Family != "Family < 10000 abundance")
+Genus_A_DF <- filter(Genus_A_DF, Genus_A_DF$Genus != "Genus < 15000 abundance")
 
 # DataFrame Relativos
 Phylum_R_DF <- psmelt(Phylum_R)
@@ -1342,13 +1342,13 @@ Genus_R_DF$Family <- as.character(Genus_R_DF$Family)
 # Renombramos
 Phylum_R_DF$Phylum[Phylum_R_DF$Abundance < 0.10] <- "Phylum < 0.10% abundance"
 Genus_R_DF$Phylum[Genus_R_DF$Abundance < 0.10] <- "Phylum < 0.10% abundance"
-Genus_R_DF$Family[Genus_R_DF$Abundance < 0.50] <- "Family < 0.50% abundance"
-Genus_R_DF$Genus[Genus_R_DF$Abundance < 0.50] <- "Genus < 0.50% abundance"
+Genus_R_DF$Family[Genus_R_DF$Abundance < 1.0] <- "Family < 1.0% abundance"
+Genus_R_DF$Genus[Genus_R_DF$Abundance < 1.0] <- "Genus < 1.0% abundance"
 # Quitamos 
 Phylum_R_DF <- filter(Phylum_R_DF, Phylum_R_DF$Phylum != "Phylum < 0.10% abundance")
 Genus_R_DF <- filter(Genus_R_DF, Genus_R_DF$Phylum != "Phylum < 0.10% abundance")
-Genus_R_DF <- filter(Genus_R_DF, Genus_R_DF$Family != "Phylum < 0.50% abundance")
-Genus_R_DF <- filter(Genus_R_DF, Genus_R_DF$Genus != "Phylum < 0.50% abundance")
+Genus_R_DF <- filter(Genus_R_DF, Genus_R_DF$Family != "Phylum < 1.0% abundance")
+Genus_R_DF <- filter(Genus_R_DF, Genus_R_DF$Genus != "Phylum < 1.0% abundance")
 ```
 
 Graficamos la abundancia a diferente nivel taxonómico

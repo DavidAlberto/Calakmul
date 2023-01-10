@@ -730,8 +730,8 @@ Genus_R_DF$Genus[Genus_R_DF$Abundance < 5.0] <- "Genus < 5.0% abundance"
 # Quitamos 
 Phylum_R_DF <- filter(Phylum_R_DF, Phylum_R_DF$Phylum != "Phylum < 1.0% abundance")
 Genus_R_DF <- filter(Genus_R_DF, Genus_R_DF$Phylum != "Phylum < 1.0% abundance")
-Genus_R_DF <- filter(Genus_R_DF, Genus_R_DF$Family != "Phylum < 1.0% abundance")
-Genus_R_DF <- filter(Genus_R_DF, Genus_R_DF$Genus != "Phylum < 1.0% abundance")
+Genus_R_DF <- filter(Genus_R_DF, Genus_R_DF$Family != "Family < 5.0% abundance")
+Genus_R_DF <- filter(Genus_R_DF, Genus_R_DF$Genus != "Genus < 5.0% abundance")
 ```
 
 #### Gráficas de valores absolutos y relativos
@@ -1824,8 +1824,8 @@ Genus_R_DF$Genus[Genus_R_DF$Abundance < 5.0] <- "Genus < 5.0% abundance"
 # Quitamos 
 Phylum_R_DF <- filter(Phylum_R_DF, Phylum_R_DF$Phylum != "Phylum < 1.0% abundance")
 Genus_R_DF <- filter(Genus_R_DF, Genus_R_DF$Phylum != "Phylum < 1.0% abundance")
-Genus_R_DF <- filter(Genus_R_DF, Genus_R_DF$Family != "Phylum < 1.0% abundance")
-Genus_R_DF <- filter(Genus_R_DF, Genus_R_DF$Genus != "Phylum < 1.0% abundance")
+Genus_R_DF <- filter(Genus_R_DF, Genus_R_DF$Family != "Family < 5.0% abundance")
+Genus_R_DF <- filter(Genus_R_DF, Genus_R_DF$Genus != "Genus < 5.0% abundance")
 ```
 
 Graficamos la abundancia a diferente nivel taxonómico

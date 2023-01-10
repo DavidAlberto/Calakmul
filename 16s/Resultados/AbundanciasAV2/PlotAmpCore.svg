@@ -357,12 +357,12 @@
 <clipPath id="clip34">
   <path d="M 666.121094 135.695313 L 683.402344 135.695313 L 683.402344 222.09375 L 666.121094 222.09375 Z M 666.121094 135.695313 "/>
 </clipPath>
-<image id="image594" width="1" height="300" xlink:href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAEsCAIAAACNMk6CAAAABmJLR0QA/wD/AP+gvaeTAAAAvElEQVQ4jaVOSQ7DQAwyJH1Epf7/S31NTA+ZxbNFjXIYYTCYse/7Q7xA20FsRuygbSC2hMyzMbGiW94x7Dqsc3Jh9Ex1WOtBO/e74U7jt6m3zDc0AztetfzQcWPH+/1TP1j++dy/yPKGNz0JlIGSLRCU2YlB86wV/PPGJOfL3FVfRZ/0++RO3+PTOzb0uUBJZ97VzC6dfVGXErdz7wv9yidRHn1VH7pDNt6Nt1b5nIl9je6tJ/Ij+I6kH9IPwG88wydMOLsAAAAASUVORK5CYII="/>
+<image id="image851" width="1" height="300" xlink:href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAEsCAIAAACNMk6CAAAABmJLR0QA/wD/AP+gvaeTAAAAvElEQVQ4jaVOSQ7DQAwyJH1Epf7/S31NTA+ZxbNFjXIYYTCYse/7Q7xA20FsRuygbSC2hMyzMbGiW94x7Dqsc3Jh9Ex1WOtBO/e74U7jt6m3zDc0AztetfzQcWPH+/1TP1j++dy/yPKGNz0JlIGSLRCU2YlB86wV/PPGJOfL3FVfRZ/0++RO3+PTOzb0uUBJZ97VzC6dfVGXErdz7wv9yidRHn1VH7pDNt6Nt1b5nIl9je6tJ/Ij+I6kH9IPwG88wydMOLsAAAAASUVORK5CYII="/>
 <pattern id="pattern0" patternUnits="userSpaceOnUse" width="1" height="300"  patternTransform="matrix(17.28,0,0,0.288,666.11977,135.695411)">
-  <use xlink:href="#image594"/>
+  <use xlink:href="#image851"/>
 </pattern>
 </defs>
-<g id="surface590">
+<g id="surface847">
 <rect x="0" y="0" width="720" height="504" style="fill:rgb(100%,100%,100%);fill-opacity:1;stroke:none;"/>
 <rect x="0" y="0" width="720" height="504" style="fill:rgb(100%,100%,100%);fill-opacity:1;stroke:none;"/>
 <path style="fill:none;stroke-width:1.066978;stroke-linecap:round;stroke-linejoin:round;stroke:rgb(100%,100%,100%);stroke-opacity:1;stroke-miterlimit:10;" d="M 0 504 L 720 504 L 720 0 L 0 0 Z M 0 504 "/>
