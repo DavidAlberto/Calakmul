@@ -1,0 +1,2050 @@
+---
+title: "Analysis of metagenomic data, rRNA 16s and Shotgun, from wetlands of the Calakmul Biosphere Reserve"
+author: "David Alberto García Estrada"
+date: "`r Sys.Date()`"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Packages
+
+Define the packages to be used
+
+```{r}
+# CRAN Repository
+cran_packages <- c("bookdown", "knitr", "tidyverse", "plyr", "grid",
+                   "gridExtra", "kableExtra", "xtable", "ggpubr")
+# Bioconductor Repository
+bioc_packages <- c("phyloseq", "dada2", "DECIPHER", "phangorn", "ggpubr",
+                   "BiocManager","DESeq2", "microbiome", "philr")
+# Github Repository
+git_source <- c("twbattaglia/btools", "gmteunisse/fantaxtic",
+                "MadsAlbertsen/ampvis2", "opisthokonta/tsnemicrobiota")
+# Git Packages
+git_packages <- c("btools", "fantaxtic", "ampvis2", "tsnemicrobiota")
+```
+
+We install the packages, for this it is necessary to uncomment the following lines.
+
+```{r}
+# # CRAN Repository
+# .inst <- cran_packages %in% installed.packages()
+# if(any(!.inst)) {
+#   install.packages(cran_packages[!.inst])
+# }
+
+# # Bioconductor Repository
+# if (!requireNamespace("BiocManager", quietly = TRUE))
+#     install.packages("BiocManager")
+# .inst <- bioc_packages %in% installed.packages()
+# if(any(!.inst)) {
+#   BiocManager::install(bioc_packages[!.inst])
+# }
+
+# # Github Repository
+# .inst <- git_source %in% installed.packages()
+# install.packages("devtools")
+# if(any(!.inst)) {
+#   devtools::install_github(git_source[!.inst])
+# }
+
+# # Git Packages
+# library("devtools")
+# install_github("opisthokonta/tsnemicrobiota")
+# install.packages("remotes")
+# remotes::install_github("kasperskytte/ampvis2")
+# devtools::install_github('twbattaglia/btools')
+```
+
+We load the packages
+
+```{r, message = FALSE, warning = FALSE}
+sapply(c(cran_packages, bioc_packages, git_packages), require, 
+       character.only = TRUE)
+library("phyloseq")
+library("ggplot2")
+library("readr")
+library("patchwork")
+library("pheatmap")
+library("microbiome")
+library("xtable")
+library("tsnemicrobiota")
+library("Rtsne")
+library("ampvis2")
+library("btools")
+library("RColorBrewer")
+library("igraph")
+library("vegan")
+library("factoextra")
+library("pbkrtest")
+library("BiodiversityR")
+```
+
+# Working directory (general)
+
+```{r}
+# IMPORTANT
+# Set working path according to your PC
+# Display current directory
+getwd()
+# If necessary, change the path where the files are stored. 
+# "." means the current directory. 
+workingDir <- "."
+setwd(workingDir)
+```
+
+# Metagenomic analysis with 16s rRNA sequencing data
+
+## Set working directory
+
+```{r}
+# We create directory
+# rRNA 16s
+rRNA16s <- "rRNA16s/"
+dir.create(rRNA16s, showWarnings = F)
+Results16s <- paste0(rRNA16s, "Results/")
+dir.create(Results16s, showWarnings = F)
+Abundance16s <- paste0(Results16s, "Abundance/")
+dir.create(Abundance16s, showWarnings = F)
+AbundanceAV216s <- paste0(Results16s, "AbundanceAV2/")
+dir.create(AbundanceAV216s, showWarnings = F)
+Diversity16s <- paste0(Results16s, "Diversity/")
+dir.create(Diversity16s, showWarnings = F)
+Alpha16s <- paste0(Diversity16s, "Alpha/")
+dir.create(Alpha16s, showWarnings = F)
+Beta16s <- paste0(Diversity16s, "Beta/")
+dir.create(Beta16s, showWarnings = F)
+```
+
+## Raw data
+
+```{r}
+RawData <- paste0(rRNA16s, "RawData")
+list.files(RawData)
+```
+
+## Order of readings
+
+Readings are initially worked separately, i.e. the Forward or R1 copy separated from the Reverse or R2 copy. Therefore, we have to make sure that both files are sorted. Then, we manipulate the name of the files to automatically generate the name of the samples in our analysis:
+
+```{r}
+# Sort file names
+fnFs <- sort(list.files(RawData, pattern="_R1.fastq.gz"))
+fnRs <- sort(list.files(RawData, pattern="_R2.fastq.gz"))
+
+# Sample name 
+sampleNames <- sapply(strsplit(fnFs, "_R"), `[`, 1)
+sampleNames
+
+# Specify the complete path to avoid ambiguity errors.
+fnFs <- file.path(RawData, fnFs)
+fnFs
+fnRs <- file.path(RawData, fnRs)
+fnRs
+```
+
+## Quality visualization
+
+The **DADA2** package has many useful functions for data pre-processing. The quality profile of the samples for each pair from 5' to 3' is displayed below:
+
+```{r}
+# Only of the first 2
+plotQualityProfile(fnFs[1:2])  
+plotQualityProfile(fnRs[1:2])  
+```
+
+## Filtering and cutting
+
+The readings are filtered and cut according to what is observed in the quality charts.  Specifically we use the arguments 
++ trunLen = average cutoff for each read
++ maxN = maximum number of indeterminate bases
++ maxEE = maximum number of errors
++ truncQ = cut reads that the quality value is less than a value
++ rm.phix = if we want to remove sequences belonging to Illumina's internal control
+
+```{r}
+# Create a directory to put the "clean" readings
+filt_path <- file.path(paste0(rRNA16s, "Filtered/"))
+filt_path
+
+if(!file_test("-d", filt_path)) dir.create(rRNA16s, filt_path)
+filtFs <- file.path(filt_path, paste0(sampleNames, "_F_filt.fastq.gz"))
+filtRs <- file.path(filt_path, paste0(sampleNames, "_R_filt.fastq.gz"))
+
+# Filter and Trimming
+out <- filterAndTrim(fnFs, filtFs, fnRs, filtRs, truncLen = c(300,250),
+              maxN = 0, maxEE = c(2,2), truncQ = 2, rm.phix = TRUE,
+              compress = TRUE, multithread = FALSE) 
+# If you are using Windows, configure multithread=FALSE
+```
+
+## De-replicate
+
+Since the samples probably have identical readings, it is not efficient to use each of them for the downstream steps. Because of this, **DADA2** recommends *de-replicate* samples to decrease redundancy and move forward efficiently.
+
+```{r}
+# De-replicate
+derepFs <- derepFastq(filtFs, verbose = TRUE)
+derepRs <- derepFastq(filtRs, verbose = TRUE)
+
+# Add the names of the samples to the de-replicated object
+names(derepFs) <- sampleNames
+names(derepRs) <- sampleNames
+```
+
+Proceed to generate an error model.
+
+```{r}
+errF <- learnErrors(filtFs, multithread=TRUE)
+errR <- learnErrors(filtRs, multithread=TRUE)
+
+# Graph
+plotErrors(errF, nominalQ=TRUE)
+plotErrors(errR, nominalQ=TRUE)
+```
+
+## Amplicon Sequence Variants (ASVs)
+
+The **DADA2** sequence inference method can operate in two different modes: *inference independent per sample* (`pool=FALSE`), and *inference from the pooled sequencing reads of all samples* (`pool=TRUE`). Independent inference has the advantage that the computation time is linear in the number of samples, and the memory requirements are flat with the number of samples. This allows scaling to data sets of almost unlimited size. Joint inference is more computationally demanding and can become intractable for data sets of tens of millions of reads. However, clustering improves detection of rare variants that are observed only once or twice in an individual sample, but many times in all samples. 
+
+```{r}
+dadaFs <- dada(derepFs, err=errF, multithread=TRUE, pool = TRUE)
+dadaRs <- dada(derepRs, err=errR, multithread=TRUE, pool = TRUE)
+```
+
+Inspecting the returned `given` class object: 
+
+```{r}
+dadaFs[[1]]
+dadaRs[[1]]
+```
+
+## Merge paired reads
+
+Merge the direct and reverse reads to obtain the complete noise-free sequences. The merge is performed by aligning the *noise removed direct reads* with the *reverse complement of the corresponding noise removed reverse reads*, and then constructing the merged "contig" sequences.
+
+```{r}
+mergers <- mergePairs(dadaFs, derepFs, dadaRs, derepRs)
+```
+
+The `mergers` object is a list of data.frames for each sample. Each data.frame contains the `$sequence`, its `$abundance` and the indices of the `$forward` and `$reverse` sequence variants that were merged. `mergePairs` eliminated paired reads that did not overlap exactly, which further reduced spurious output. 
+
+## Build sequence table
+
+Construction of an amplicon sequence variant (ASV) table, a higher resolution version of the OTU table produced by traditional methods.
+
+```{r}
+seqtabAll <- makeSequenceTable(mergers[!grepl("Mock", names(mergers))])
+dim(seqtabAll)
+table(nchar(getSequences(seqtabAll)))
+```
+
+## Remove chimeras
+
+The `given` method corrects substitution and indel (insertion/deletion) errors, but chimeras (product of PCR amplification) remain. Fortunately, the accuracy of sequence variants after removing noise makes identifying chimeric ASVs simpler than when dealing with diffuse OTUs. Chimeric sequences are identified if they can be accurately reconstructed by combining a left and a right segment of two more abundant "primary" sequences. 
+
+```{r}
+seqtabNoC <- removeBimeraDenovo(seqtabAll, method = "consensus",
+                                multithread = TRUE, verbose = TRUE)
+dim(seqtabNoC)
+sum(seqtabNoC)/sum(seqtabAll)
+```
+
+## Tracking of readings for each step
+
+As a final check of our progress, we will see the number of readings that were taken at each step: 
+
+```{r}
+getN <- function(x) sum(getUniques(x))
+track <- cbind(out, sapply(dadaFs, getN), sapply(dadaRs, getN), 
+               sapply(mergers, getN), rowSums(seqtabNoC))
+# If processing a single sample, remove sapply calls: p. replace sapply(dadaFs, getN) with getN(dadaFs) 
+colnames(track) <- c("input", "filtered", "denoisedF", "denoisedR", "merged", "nonchim")
+rownames(track) <- sampleNames
+head(track)
+```
+
+## Taxonomic Assignment
+
+The **DADA2** package implements the *naïve Bayesian classifier* method. The `assignTaxonomy` function takes as input a set of sequences to classify and a training set of reference sequences with known taxonomy, and generates taxonomic assignments with at least `minBoot` bootstrap confidence.
+We maintain formatted training fasas for the *RDP* training set, *GreenGenes* clustered at 97% identity and the *Silva* reference database, and additional training fasas suitable for protists and certain specific environments have been contributed. 
+To continue, download the `silva_nr_v138_train_set.fa.gz` file and place it in the directory with the fastq files. 
+The *sequence table without the chimeras*, is the table we use to perform the taxonomic classification.
+
+### SILVA version 138
+
+**SILVA** provides comprehensive, quality-tested and regularly updated datasets of aligned small (16S/18S, SSU) and large subunit (23S/28S, LSU) ribosomal RNA (rRNA) sequences for all three domains of life (bacteria, archaea and eukaryotes). 
+
+```{r}
+fastaRef <- "rRNA16s/Silva/silva_nr_v138_train_set.fa"
+taxTab <- assignTaxonomy(seqtabNoC, refFasta = fastaRef, multithread=TRUE)
+```
+
+The **DADA2** package also implements a method to perform **species level assignments** based on exact matches between ASVs and sequenced reference strains. A recent analysis suggests that exact match (or 100% identity) is the only suitable way to assign species to 16S gene fragments. Currently, species assignment training fasas are available for the **Silva** and **RDP** 16S databases. To follow the optional species addition step, download the file `silva_species_assignment_v138.fa.gz` and place it in the directory with the fastq files. 
+
+
+```{r}
+taxTabExtra <- addSpecies(taxTab, "rRNA16s/Silva/silva_species_assignment_v138.fa",
+                          verbose = TRUE)
+unname(head(taxTab)) -> tabla
+colnames(tabla) <- c("Kingdom", "Phylum", "Order", "Class", "Family", "Genus")
+head(tabla)
+```
+
+## Phylogenetic tree
+
+Since the taxonomic profile is constructed with homologous 16s rRNA gene sequences, one can use these sequences to infer a phylogenetic tree. Inference based on **Maximum Likelihood**.
+Sequence alignment:
+
+```{r}
+seqs <- getSequences(seqtabNoC)
+names(seqs) <- seqs
+alignment <- AlignSeqs(DNAStringSet(seqs), anchor=NA,verbose=FALSE)
+```
+
+Infer starting tree to initialize the search by **Maximum Likelihood** (ML). A nucleotide substitution model is also fitted to parameterize the rate of change from one nucleotide to another to correctly infer branch length and tree topology.
+
+```{r}
+phangAlign <- phyDat(as(alignment, "matrix"), type="DNA")
+dm <- dist.ml(phangAlign)
+treeNJ <- NJ(dm) 
+fit <- pml(treeNJ, data = phangAlign)
+fitGTR <- update(fit, k=4, inv=0.2)
+```
+
+# Metadata
+
+Now, we have all the ingredients to form an R object containing everything we care about in a metagenomic experiment, for example, a *table of counts* indicating the number of reads per 16s rRNA gene sequence, a *table with the taxonomic lineage* of those sequences, a *phylogenetic tree* relating those sequences to each other, and finally, a *table with variables associated* to our samples, also called metadata.
+
+```{r}
+samdf <- read.csv("rRNA16s/Metadata16s.csv", header=TRUE, row.names = 1)
+rownames(seqtabNoC) %in% rownames(samdf)
+all(rownames(seqtabAll) %in% samdf$run)
+```
+
+# Phyloseq
+
+**Phyloseq** is a Bioconductor package for the manipulation and analysis of metagenomic data generated by high-throughput sequencing methodologies. **Phyloseq** is a tool for *importing*, *saving*, *analyzing* and *visualizing* this type of data after it has been initially processed, e.g. *de novo assembly*, *ASVs* or *OTUs* (clustered), including other important associated data (if available): *table of observations associated with each sample* (e.g. *species*, *geographical location*, *temperature*, etc.), known as sample data or *metadata*, *phylogenetic tree*, and *taxonomic identification* of each OTU. The structure of the **Phyloseq** package consists of a series of functions for accessing and processing phyloseq objects. These objects are composed of four components that store the read counts, the metadata, the taxonomy and the phylogenetic tree. The package also provides a set of tools to import data from other programs.
+
+With these elements we proceed to generate a phyloseq object:
+
+```{r, message = FALSE, warning = FALSE}
+ps <- phyloseq(otu_table(seqtabNoC, taxa_are_rows=FALSE), 
+               sample_data(samdf), 
+               tax_table(taxTab),
+               phy_tree(fitGTR$tree))
+# Remove potential synthetic samples
+ps <- prune_samples(sample_names(ps) != "Mock", ps) 
+ps
+```
+
+Complete phyloseq structure.
+
+```{r}
+class(ps)
+ps
+```
+
+It is more convenient to use short names for our ASVs (e.g., ASV21) instead of the full DNA sequence when working with some of the phyloseq tables and visualizations, but we want to keep the full DNA sequences for other purposes, such as merging with other datasets or indexing in reference databases like Earth Microbiome Project. For that reason, we will store the DNA sequences of our ASVs in the refseq slot of the phyloseq object and then rename our taxa to a short string. That way, the short names of the new taxa will appear in tables and graphs, and we can still retrieve the DNA sequences corresponding to each ASV as needed with refseq(ps). 
+
+````{r, message = FALSE, warning = FALSE}
+dna <- Biostrings::DNAStringSet(taxa_names(ps))
+names(dna) <- taxa_names(ps)
+ps <- merge_phyloseq(ps, dna)
+taxa_names(ps) <- paste0("ASV", seq(ntaxa(ps)))
+ps
+```
+
+## Quality control of 16s analysis
+
+The first thing we can look at is the prevalence of the taxonomic features. First we create a data frame with the prevalence values, then we add the taxonomy to them and plot.
+
+```{r}
+psd <- ps
+# We compute prevalence for each feature and store it in a data frame.
+prevdf <- apply(X = otu_table(psd),
+               MARGIN = ifelse(taxa_are_rows(psd), yes = 1, no = 2),
+               FUN = function(x){sum(x > 0)})
+
+# We add the taxonomy
+prevdf <- data.frame(Prevalence = prevdf,
+                    TotalAbundance = taxa_sums(psd),
+                    tax_table(psd))
+
+plyr::ddply(prevdf, "Phylum", function(df1){cbind(mean(df1$Prevalence),sum(df1$Prevalence))}) -> dfprev
+kable(dfprev)
+```
+
+In examining the table, it is evident that some Phylum, although present, are very poorly represented. Column 1 represents the mean number of read counts for that Phylum, while column 2 represents the sum.  It is very risky to keep these taxonomic groups in the analysis as they may correspond to false positives. To filter them, we generate a vector with all the taxa we want to filter.
+
+````{r, message = FALSE, warning = FALSE}
+# Define taxa to filter
+filterPhyla <- c("Calditrichota", "Dadabacteria", NA)
+# Proceed to filter
+psd1 <- subset_taxa(psd, !Phylum %in% filterPhyla)
+```
+
+We remove taxa that do not correspond to microorganisms such as chloroplasts, mitochondria and others.
+
+```{r}
+filterPhyla2 <- c("Chloroplast", "Mitochondria", "Eukaryota")
+psd1 <- subset_taxa(psd1, !Kingdom %in% filterPhyla2)
+psd1 <- subset_taxa(psd1, !Phylum %in% filterPhyla2)
+psd1 <- subset_taxa(psd1, !Class %in% filterPhyla2)
+psd1 <- subset_taxa(psd1, !Order %in% filterPhyla2)
+psd1 <- subset_taxa(psd1, !Family %in% filterPhyla2)
+psd1 <- subset_taxa(psd1, !Genus %in% filterPhyla2)
+```
+
+Filtering that has to do with the arithmetic mean of counts per reading per taxa, with the distribution of these and with the filtering of samples under a certain number of readings.
+
+```{r, message = FALSE, warning = FALSE}
+# We filter taxa according to a threshold of mean number of read counts, in this case 1e-5
+psd2 <- filter_taxa(psd1, function(x) mean(x) > 1e-5, TRUE)
+# We can also remove taxa that are not observed more than X times in at least 10% of the samples.
+psd3 <- filter_taxa(psd2, function(x) sum(x > 2) > (0.1*length(x)), TRUE)
+# And finally filter samples with less than 1000 reads
+psd4 <- prune_samples(sample_sums(psd3) > 1000, psd3)
+psd4
+```
+
+Another way to filter out low prevalence taxa is to set a threshold and then visualize the effect graphically.
+
+```{r, include = TRUE, echo = TRUE, fig.pos = 'H', fig.dim = c(12,8), fig.align = "center", message=FALSE, fig.cap = 'Fraction prevalent at Phylum level.'}
+# We select the taxa of interest.
+prevdf1 <- subset(prevdf, Phylum %in% get_taxa_unique(psd4, "Phylum"))
+ggplot(prevdf1, aes(TotalAbundance, Prevalence / nsamples(psd),color=Phylum)) +
+# We add a line for our threshold
+geom_hline(yintercept = 0.05, alpha = 0.5, linetype = 2) + geom_point(size = 2, alpha = 0.7) +
+  scale_x_log10() + xlab("Total Abundance") + ylab("Prevalence [Frac. Samples]") +
+  facet_wrap(~Phylum) + theme(legend.position="none")
+```
+
+````{r, message = FALSE, warning = FALSE}
+# We set the prevalence threshold to 5%.
+prevalenceThreshold <- 0.05 * nsamples(psd4)
+# Run a prevalence filter, using the `prune_taxa()` function.
+keepTaxa <- rownames(prevdf1)[(prevdf1$Prevalence >= prevalenceThreshold)]
+psd5 <- prune_taxa(keepTaxa, psd4)
+```
+
+**DADA2** uses as taxa name the sequence or ASV associated to a given taxon. This is convenient when we are interested in the sequence in our analysis, however in this practical we are only going to work at the community level.
+Therefore, we will replace these names with correlative codes, which will make the subsequent visualizations more understandable.
+
+````{r, message = FALSE, warning = FALSE}
+# Replace the sequences with a generic name
+taxa_names(psd5) <- paste0("ASV", seq(ntaxa(psd5)))
+```
+
+## Distribution
+
+With our phyloseq object already filtered and ready to use, we can plot the distribution of read counts by sample number to get an idea of their distribution.
+
+````{r, include = TRUE, echo = TRUE, fig.pos = 'H', fig.dim = c(12,8), fig.align = "center", message=FALSE, fig.cap = 'Depth distribution of sequenced samples.'}
+sample_sum_df <- data.frame(sum = sample_sums(psd5))
+
+ggplot(sample_sum_df, aes(x = sum)) + 
+  geom_histogram(color = "black", fill = "grey", binwidth = 2500) +
+  ggtitle("Distribution of sample sequencing depth") + 
+  xlab("Read counts") +
+  theme(axis.title.y = element_blank()) 
+```
+
+Finally, we calculated rarefaction curves for each sample so that we could determine if the sequencing depth was sufficient or if we might need to sequence more. In other words, this analysis would allow us to find out if by sequencing more we would observe more OTUs or ASVs.
+
+```{r}
+# First we load some scripts remotely.
+scripts <- c("graphical_methods.R",
+             "tree_methods.R",
+             "plot_merged_trees.R",
+             "specificity_methods.R",
+             "ternary_plot.R",
+             "richness.R",
+             "edgePCA.R",
+             "copy_number_correction.R",
+             "import_frogs.R",
+             "prevalence.R",
+             "compute_niche.R")
+urls <- paste0("https://raw.githubusercontent.com/mahendra-mariadassou/phyloseq-extended/master/R/", scripts)
+
+for (url in urls) {
+  source(url)
+}
+```
+
+Object (Caution, this one takes time)
+
+```{r}
+p <- ggrare(psd5, step = 100, label = "SITE_ID", plot = TRUE, 
+            parallel = FALSE, se = TRUE, color = "SITE_ID")
+```
+
+Plot
+
+```{r}
+q <- p + theme_classic2()+
+  scale_fill_brewer(palette = "Set1")+
+  scale_color_brewer(palette = "Set1")
+q
+pdf("rRNA16s/Results/PlotDistribution.pdf", width=20, height=10)
+q
+dev.off()
+svg("rRNA16s/Results/PlotDistribution.svg", width=20, height=10)
+q
+dev.off()
+pdf("rRNA16s/Results/PlotDistribution1.pdf", width=20, height=10)
+q + facet_wrap("SITE_ID")
+dev.off()
+svg("rRNA16s/Results/PlotDistribution1.svg", width=20, height=10)
+q + facet_wrap("SITE_ID")
+dev.off()
+```
+
+## Structure and manipulation of a phyloseq object
+
+Information of a phyloseq object.
+
+```{r}
+# Number of taxa
+ntaxa(psd5)
+# Number of samples
+nsamples(psd5)
+# Names of samples
+sample_names(psd5)
+# Taxonomic levels 
+rank_names(psd5)
+# Metadata variable names
+sample_variables(psd5)
+```
+
+The tally table relates the name of the taxa to the samples and to the number of reads mapped against them. Here the number of reads is directly proportional to the number of times a taxon is observed.
+The other important component is the taxonomy table.
+
+```{r}
+# table of counts
+otu_table(psd5)[1:5, 1:5]
+```
+
+We can also see a statistical summary of the table of OTUs
+
+```{r}
+# summary statistics
+summary(t(psd5@otu_table@.Data))
+```
+
+The taxonomy table links the taxa name to the taxonomic lineage of the taxa, i.e., it links a sequence variant, or ASV, to taxonomic ranks from Kingdom to Genus or Species depending on the level of resolution of the analysis.
+
+```{r}
+# taxonomy table
+tax_table(psd5)[1:5, 1:4]
+```
+
+## Data transformation and manipulation
+
+```{r, message = FALSE, warning = FALSE}
+# How much empty data there is 
+summary(psd5@tax_table@.Data== "") # There are 1337 NAs
+psd5 <- prune_taxa(taxa_sums(psd5) > 0, psd5)
+Phylo_P <- subset_taxa(psd5, Phylum != "")
+Phylo_G <- subset_taxa(psd5, Genus != "")
+summary(Phylo_P@tax_table@.Data== "") # There is no longer  
+summary(Phylo_G@tax_table@.Data== "") # There is no longer 
+```
+
+Grouping
+
+```{r}
+# Grouping by taxonomic level
+Phylum <- tax_glom(physeq = Phylo_P, taxrank = "Phylum", NArm = F)
+Genus <- tax_glom(physeq = Phylo_G, taxrank = "Genus", NArm = F)
+```
+
+### Absolute and relative data
+
+We generate a table of absolute and relative data at the "Phylum" level, for further analysis.
+
+```{r, message = FALSE, warning = FALSE}
+# We transform to relative values
+Phylum_R <- transform_sample_counts(Phylum, function(x) x*100 / sum(x))
+Genus_R <- transform_sample_counts(Genus, function(x) x*100 / sum(x))
+
+# Absolute
+Phylum_A_DF <- psmelt(Phylum)
+Genus_A_DF <- psmelt(Genus)
+Phylum_A_DF$Phylum <- as.character(Phylum_A_DF$Phylum) 
+Genus_A_DF$Genus <- as.character(Genus_A_DF$Genus)
+Genus_A_DF$Family <- as.character(Genus_A_DF$Family)
+Phylum_A_DF$Phylum[Phylum_A_DF$Abundance < 100] <- "Phylum < 100 abundance"
+Genus_A_DF$Phylum[Genus_A_DF$Abundance < 100] <- "Phylum < 100 abundance"
+Genus_A_DF$Family[Genus_A_DF$Abundance < 300] <- "Family < 300 abundance"
+Genus_A_DF$Genus[Genus_A_DF$Abundance < 300] <- "Genus < 300 abundance"
+# Phylum_A_DF <- filter(Phylum_A_DF, Phylum_A_DF$Phylum != "Phylum < 100 abundance") 
+# Genus_A_DF <- filter(Genus_A_DF, Genus_A_DF$Phylum != "Phylum < 100 abundance")
+# Genus_A_DF <- filter(Genus_A_DF, Genus_A_DF$Family != "Family < 300 abundance")
+# Genus_A_DF <- filter(Genus_A_DF, Genus_A_DF$Genus != "Genus < 300 abundance")
+
+# Relative
+Phylum_R_DF <- psmelt(Phylum_R)
+Genus_R_DF <- psmelt(Genus_R)
+Phylum_R_DF$Phylum <- as.character(Phylum_R_DF$Phylum) 
+Genus_R_DF$Genus <- as.character(Genus_R_DF$Genus)
+Genus_R_DF$Family <- as.character(Genus_R_DF$Family)
+Phylum_R_DF$Phylum[Phylum_R_DF$Abundance < 1.0] <- "Phylum < 1.0% abundance"
+Genus_R_DF$Phylum[Genus_R_DF$Abundance < 1.0] <- "Phylum < 1.0% abundance"
+Genus_R_DF$Family[Genus_R_DF$Abundance < 5.0] <- "Family < 5.0% abundance"
+Genus_R_DF$Genus[Genus_R_DF$Abundance < 5.0] <- "Genus < 5.0% abundance"
+# Phylum_R_DF <- filter(Phylum_R_DF, Phylum_R_DF$Phylum != "Phylum < 1.0% abundance")
+# Genus_R_DF <- filter(Genus_R_DF, Genus_R_DF$Phylum != "Phylum < 1.0% abundance")
+# Genus_R_DF <- filter(Genus_R_DF, Genus_R_DF$Family != "Family < 5.0% abundance")
+# Genus_R_DF <- filter(Genus_R_DF, Genus_R_DF$Genus != "Genus < 5.0% abundance")
+```
+
+#### Plots of absolute and relative values
+
+In X axis we use the variable "SITE_ID", and in Y is "Abundance" and fill by "Phylum".
+
+```{r}
+# Version 1 - Phylum
+Abs.plot.P.P <- ggplot(data = Phylum_A_DF, aes(x = SITE_ID, y = Abundance, fill = Phylum)) + 
+  geom_bar(aes(), stat = "identity", position = "stack") + 
+  theme_classic() +
+  labs(x = "Samples", y = "Absolute abundance",
+       title = "Absolute abundance of analyzed samples") +
+  theme(legend.position = "right", 
+        legend.text = element_text(size = 12, face = "bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        axis.text = element_text(color = "black", size = 12, face = "bold"),
+        axis.title = element_text(color = "black", size = 12, face = "bold"),
+        plot.title = element_text(hjust = 0.5, size = 14, face = "bold")) + 
+  facet_grid(. ~ Phylum_A_DF$YEAR)
+Abs.plot.P.P
+
+Rel.plot.P.P <- ggplot(data = Phylum_R_DF, aes(x = SITE_ID, y = Abundance, fill = Phylum)) + 
+  geom_bar(aes(), stat = "identity", position = "fill") + 
+  theme_classic() +
+  labs(x = "Samples", y = "Relative abundance",
+       title = "Relative abundance of analyzed samples") +
+  theme(legend.position = "right", 
+        legend.text = element_text(size = 12, face = "bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        axis.text = element_text(color = "black", size = 12, face = "bold"),
+        axis.title = element_text(color = "black", size = 12, face = "bold"),
+        plot.title = element_text(hjust = 0.5, size = 14, face = "bold")) + 
+  facet_grid(. ~ Phylum_R_DF$YEAR)
+Rel.plot.P.P
+
+Abs.plot.P.P | Rel.plot.P.P
+
+pdf(paste0(Abundance16s, "PlotRawPhylumP.pdf"), width=20, height=10)
+Abs.plot.P.P
+dev.off()
+svg(paste0(Abundance16s, "PlotRawPhylumP.svg"), width=20, height=10)
+Abs.plot.P.P
+dev.off()
+pdf(paste0(Abundance16s, "PlotRelPhylumP.pdf"), width=20, height=10)
+Rel.plot.P.P
+dev.off()
+svg(paste0(Abundance16s, "PlotRelPhylumP.svg"), width=20, height=10)
+Rel.plot.P.P
+dev.off()
+pdf(paste0(Abundance16s, "PlotRaw-RelPhylumP.pdf"), width=20, height=10)
+Abs.plot.P.P | Rel.plot.P.P
+dev.off()
+svg(paste0(Abundance16s, "PlotRaw-RelPhylumP.svg"), width=20, height=10)
+Abs.plot.P.P | Rel.plot.P.P
+dev.off()
+
+# Version 2 - Genus
+
+Abs.plot.G.P <- ggplot(data = Genus_A_DF, aes(x = SITE_ID, y = Abundance, fill = Phylum)) + 
+  geom_bar(aes(), stat = "identity", position = "stack") + 
+  theme_classic() +
+  labs(x = "Samples", y = "Absolute abundance",
+       title = "Absolute abundance of analyzed samples") +
+  theme(legend.position = "right", 
+        legend.text = element_text(size = 12, face = "bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        axis.text = element_text(color = "black", size = 12, face = "bold"),
+        axis.title = element_text(color = "black", size = 12, face = "bold"),
+        plot.title = element_text(hjust = 0.5, size = 14, face = "bold")) +
+  facet_grid(. ~ Genus_A_DF$YEAR)
+Abs.plot.G.P
+
+Rel.plot.G.P <- ggplot(data = Genus_R_DF, aes(x = SITE_ID, y = Abundance, fill = Phylum)) + 
+  geom_bar(aes(), stat = "identity", position = "fill") + 
+  theme_classic() +
+  labs(x = "Samples", y = "Relative abundance",
+       title = "Relative abundance of analyzed samples") +
+  theme(legend.position = "right", 
+        legend.text = element_text(size = 12, face = "bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        axis.text = element_text(color = "black", size = 12, face = "bold"),
+        axis.title = element_text(color = "black", size = 12, face = "bold"),
+        plot.title = element_text(hjust = 0.5, size = 14, face = "bold")) +
+  facet_grid(. ~ Genus_R_DF$YEAR)
+Rel.plot.G.P
+
+Abs.plot.G.P | Rel.plot.G.P
+
+pdf(paste0(Abundance16s, "PlotRawPhylumG.pdf"), width=20, height=10)
+Abs.plot.G.P
+dev.off()
+svg(paste0(Abundance16s, "PlotRawPhylumG.svg"), width=20, height=10)
+Abs.plot.G.P
+dev.off()
+pdf(paste0(Abundance16s, "PlotRelPhylumG.pdf"), width=20, height=10)
+Rel.plot.G.P
+dev.off()
+svg(paste0(Abundance16s, "PlotRelPhylumG.svg"), width=20, height=10)
+Rel.plot.G.P
+dev.off()
+pdf(paste0(Abundance16s, "PlotRaw-RelPhylumG.pdf"), width=20, height=10)
+Abs.plot.G.P | Rel.plot.G.P
+dev.off()
+svg(paste0(Abundance16s, "PlotRaw-RelPhylumG.svg"), width=20, height=10)
+Abs.plot.G.P | Rel.plot.G.P
+dev.off()
+```
+
+In X axis we use the variable "SITE_ID", and in Y it is "Abundance" and we fill by "Genus".
+
+```{r}
+# Version 2 - Genus
+Abs.plot.G.G <- ggplot(data = Genus_A_DF, aes(x = SITE_ID, y = Abundance, fill = Genus)) + 
+  geom_bar(aes(), stat = "identity", position = "stack") + 
+  theme_classic() +
+  labs(x = "Samples", y = "Absolute abundance",
+       title = "Absolute abundance of analyzed samples") +
+  theme(legend.position = "right", 
+        legend.text = element_text(size = 12, face = "bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        axis.text = element_text(color = "black", size = 12, face = "bold"),
+        axis.title = element_text(color = "black", size = 12, face = "bold"),
+        plot.title = element_text(hjust = 0.5, size = 14, face = "bold")) + 
+  facet_grid(. ~ Genus_A_DF$YEAR)
+Abs.plot.G.G
+
+Rel.plot.G.G <- ggplot(data = Genus_R_DF, aes(x = SITE_ID, y = Abundance, fill = Genus)) + 
+  geom_bar(aes(), stat = "identity", position = "fill") + 
+  theme_classic() +
+  labs(x = "Samples", y = "Relative abundance",
+       title = "Relative abundance of analyzed samples") +
+  theme(legend.position = "right", 
+        legend.text = element_text(size = 12, face = "bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        axis.text = element_text(color = "black", size = 12, face = "bold"),
+        axis.title = element_text(color = "black", size = 12, face = "bold"),
+        plot.title = element_text(hjust = 0.5, size = 14, face = "bold")) + 
+  facet_grid(. ~ Genus_R_DF$YEAR)
+Rel.plot.G.G
+
+Abs.plot.G.G | Rel.plot.G.G
+
+pdf(paste0(Abundance16s, "PlotRawGenusG.pdf"), width=20, height=10)
+Abs.plot.G.G
+dev.off()
+svg(paste0(Abundance16s, "PlotRawGenusG.svg"), width=20, height=10)
+Abs.plot.G.G
+dev.off()
+pdf(paste0(Abundance16s, "PlotRelGenusG.pdf"), width=20, height=10)
+Rel.plot.G.G
+dev.off()
+svg(paste0(Abundance16s, "PlotRelGenusG.svg"), width=20, height=10)
+Rel.plot.G.G
+dev.off()
+pdf(paste0(Abundance16s, "PlotRaw-RelGenusG.pdf"), width=20, height=10)
+Abs.plot.G.G | Rel.plot.G.G
+dev.off()
+svg(paste0(Abundance16s, "PlotRaw-RelGenusG.svg"), width=20, height=10)
+Abs.plot.G.G | Rel.plot.G.G
+dev.off()
+```
+
+# Diversity analysis
+
+## Alpha diversity
+
+In the metagenomic context, we measure alpha $alpha$ diversity using a series of measures borrowed from ecology that allow us to characterize a microbial community. phyloseq has a very useful function that allows us to calculate and plot up to seven measures, i.e., Observed, Chao1, ACE, Shannon, Simpson, Inverse Simpson and Fisher.
+
+```{r}
+# Version 1 - Phylum
+alfa.diverP <- plot_richness(physeq = Phylo_P, 
+              color =  "SITE_ID",
+              x = "SITE_ID",
+              measures = c("Observed", "Chao1", "ACE", "Shannon", "Simpson", "Fisher"),
+              title = "Alpha diversity indices for the Calakmul samples obtained by rRNA 16s") + 
+  labs(x="Samples", y="Alpha Diversity Measure") +
+  theme(legend.position = "right", 
+        legend.text = element_text(size=12, face="bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        axis.text = element_text(color = "black", size = 12, face = "bold"),
+        axis.title = element_text(color = "black", size = 12, face = "bold"),
+        plot.title = element_text(hjust = 0.5, size=14, face="bold")) +
+  geom_boxplot(aes(fill = SITE_ID), alpha=.7) + 
+  scale_color_brewer(palette = "Set1") + 
+  scale_fill_brewer(palette = "Set1")
+alfa.diverP
+pdf(paste0(Alpha16s, "PlotAlfaP.pdf"), width=20, height=10)
+alfa.diverP
+dev.off()
+svg(paste0(Alpha16s, "PlotAlfaP.svg"), width=20, height=10)
+alfa.diverP
+dev.off()
+
+## Version 2 - Genus
+alfa.diverG <- plot_richness(physeq = Phylo_G, 
+              color =  "SITE_ID",
+              x = "SITE_ID",
+              measures = c("Observed", "Chao1", "ACE", "Shannon", "Simpson", "Fisher"),
+              title = "Alpha diversity indices for the Calakmul samples obtained by rRNA 16s") + 
+  labs(x="Samples", y="Alpha Diversity Measure") +
+  theme(legend.position = "right", 
+        legend.text = element_text(size=12, face="bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        axis.text = element_text(color = "black", size = 12, face = "bold"),
+        axis.title = element_text(color = "black", size = 12, face = "bold"),
+        plot.title = element_text(hjust = 0.5, size=14, face="bold")) +
+  geom_boxplot(aes(fill = SITE_ID), alpha=.7) + 
+  scale_color_brewer(palette = "Set1") + 
+  scale_fill_brewer(palette = "Set1")
+alfa.diverG
+pdf(paste0(Alpha16s, "PlotAlfaG.pdf"), width=20, height=10)
+alfa.diverG
+dev.off()
+svg(paste0(Alpha16s, "PlotAlfaG.svg"), width=20, height=10)
+alfa.diverG
+dev.off()
+```
+
+## Beta Diversity
+
+Beta diversity $beta$ is the ratio of regional to local species diversity. Beta diversity as a measure of species turnover overemphasizes the role of rare species, since the difference in species composition between two sites or communities probably reflects the presence or absence of some rare species in the assemblages. 
+There are different measures of similarity (or dissimilarity, i.e., 1 - similarity) available that allow us to understand the relationships between our samples. In general they all produce comparable distance matrices. The phyloseq package offers a large number of distance measures. The most popular are *UniFrac* and *Weighted UniFrac* (measures that consider phylogeny) and others independent of phylogeny such as: *Jaccard*, *Manhattan*, *Euclidian*, *Bray-Curtis*, *Canberra*, etc. On the other hand, the resulting distance matrix is not used in isolation but in conjunction with some ordination or multidimensional scaling method. Again, phyloseq offers a large number of methods among which are: detrended and canonical correspondence analysis, Double Principal Coordinate Analysis, Non-metric MultiDimenstional Scaling, and MDS/PCoA.
+
+
+```{r}
+distanceMethodList
+Ordenacion <- c("NMDS", "MDS", "PCoA", "DPCoA")
+Distancia <- c("bray", "unifrac", "dpcoa", "jsd", "jaccard")
+
+# Version 1 - Phylum
+Phylo_P.2 <- prune_taxa(taxa_sums(Phylo_P) > 0, Phylo_P)
+Phylo_P.2@sam_data@.Data[[6]] <- as.factor(Phylo_P.2@sam_data@.Data[[6]])
+for (o in Ordenacion){
+  # Prueba 
+  # o <- "NMDS"
+  for (d in Distancia){
+    # Prueba 
+    # d <- "unifrac"
+    Ord <- ordinate(physeq = Phylo_P.2, method = o, distance = d)
+    Beta <- plot_ordination(physeq = Phylo_P.2, ordination = Ord, 
+                            color = "SITE_ID", shape = "YEAR") +
+      theme_classic() +
+      geom_point(size = 5) +
+      geom_text(mapping = aes(label = SITE_ID), size = 4, vjust = 2, hjust = 1) + 
+      geom_vline(xintercept = 0) +
+      geom_hline(yintercept = 0) +
+      labs(title = paste("Beta diversity with", o, "-", d, 
+                         "for the Calakmul samples rRNA 16s")) +
+             theme(legend.position = "right", 
+                   legend.text = element_text(size=12, face="bold"),
+                   legend.title = element_text(size = 12, face = "bold"),
+                   axis.text = element_text(color = "black", size = 12, face = "bold"),
+                   axis.title = element_text(color = "black", size = 12, face = "bold"),
+                   plot.title = element_text(hjust = 0.5, size=14, face="bold")) +
+             scale_color_brewer(palette = "Set1") + 
+             scale_fill_brewer(palette = "Set1")
+    print(Beta)
+    pdf(paste0(Beta16s, "PlotBeta", o, "-", d, "-P.pdf"), 
+        width=20, height=10)
+    print(Beta)
+    dev.off()
+    svg(paste0(Beta16s, "PlotBeta", o, "-", d, "-P.svg"),
+        width=20, height=10)
+    print(Beta)
+    dev.off()
+  }
+}
+
+# Version 1 - Phylum
+Phylo_G.2 <- prune_taxa(taxa_sums(Phylo_G) > 0, Phylo_G)
+Phylo_G.2@sam_data@.Data[[6]] <- as.factor(Phylo_G.2@sam_data@.Data[[6]])
+for (o in Ordenacion){
+  # Prueba 
+  # o <- "NMDS"
+  for (d in Distancia){
+    # Prueba 
+    # d <- "bray"
+    Ord <- ordinate(physeq = Phylo_G.2, method = o, distance = d)
+    Beta <- plot_ordination(physeq = Phylo_G.2, ordination = Ord, 
+                            color = "SITE_ID", shape = "YEAR") +
+      theme_classic() +
+      geom_point(size = 5) +
+      geom_text(mapping = aes(label = SITE_ID), size = 4, vjust = 2, hjust = 1) + 
+      geom_vline(xintercept = 0) +
+      geom_hline(yintercept = 0) +
+      labs(title = paste("Beta diversity with", o, "-", d, 
+                         "for the Calakmul samples rRNA 16s")) +
+             theme(legend.position = "right", 
+                   legend.text = element_text(size=12, face="bold"),
+                   legend.title = element_text(size = 12, face = "bold"),
+                   axis.text = element_text(color = "black", size = 12, face = "bold"),
+                   axis.title = element_text(color = "black", size = 12, face = "bold"),
+                   plot.title = element_text(hjust = 0.5, size=14, face="bold")) +
+             scale_color_brewer(palette = "Set1") + 
+             scale_fill_brewer(palette = "Set1")
+    print(Beta)
+    pdf(paste0(Beta16s, "PlotBeta", o, "-", d, "-G.pdf"), 
+        width=20, height=10)
+    print(Beta)
+    dev.off()
+    svg(paste0(Beta16s, "PlotBeta", o, "-", d, "-G.svg"),
+        width=20, height=10)
+    print(Beta)
+    dev.off()
+  }
+}
+```
+
+# Different visualizations of abundances
+
+Other tools allow us to examine the composition of these microbial communities. The ampvis2 package, developed by Mads Albertsen and Kasper Skytte Andersen, allows us to do just this. Let us first transform the phyloseq object we have been working with into an ampvis2 object.
+
+```{r, message = FALSE, warning = FALSE}
+# Version 1 - Phylum 
+objP <- Phylo_P.2
+otu_table(objP) <- t(otu_table(objP))
+otutableP <- data.frame(OTU = rownames(phyloseq::otu_table(objP)@.Data),
+                       phyloseq::otu_table(objP)@.Data,
+                       phyloseq::tax_table(objP)@.Data,
+                       check.names = FALSE)
+metadataP <- data.frame(phyloseq::sample_data(objP), 
+                       check.names = FALSE)
+
+# Version 2 - Genus
+objG <- Phylo_G.2
+otu_table(objG) <- t(otu_table(objG))
+otutableG <- data.frame(OTU = rownames(phyloseq::otu_table(objG)@.Data),
+                       phyloseq::otu_table(objG)@.Data,
+                       phyloseq::tax_table(objG)@.Data,
+                       check.names = FALSE)
+metadataG <- data.frame(phyloseq::sample_data(objG), 
+                       check.names = FALSE)
+```
+
+Ampvis2 requires
+- Taxonomic ranges be and range from *Kingdom* to *Species*. 
+- The first column of the metadata be the identifier of each sample.
+
+```{r}
+# Version 1 - Phylum
+otutableP$Species <- otutableP$Genus
+colnames(metadataP)
+rownames(metadataP)
+metadataP$SAMPLE <- rownames(metadataP)
+colnames(metadataP)
+metadataP <- metadataP[,c(7, 1:6)]
+AV2P <- amp_load(otutableP, metadataP)
+
+# Version 2 - Genus
+otutableG$Species <- otutableG$Genus
+colnames(metadataG)
+rownames(metadataG)
+metadataG$SAMPLE <- rownames(metadataG)
+colnames(metadataG)
+metadataG <- metadataG[,c(7, 1:6)]
+AV2G <- amp_load(otutableG, metadataG)
+```
+
+Heat map
+
+```{r}
+# Version 1 - Phylum
+# Phylum and genus
+AmpHMP_GP <- amp_heatmap(AV2P, 
+            group_by = "SITE_ID", facet_by = "SITE_ID", plot_values = TRUE,
+            tax_show = 15, tax_aggregate = "Genus", tax_add = "Phylum",
+            # color_vector = c("lightblue3", "olivedrab3"),
+            plot_colorscale = "sqrt", plot_legendbreaks = c(0, 0.5, 1, 1.5, 2, 2.5, 3.0)) +
+  labs(title="Relative abundance for Phylum and genus")+
+  theme(legend.position = "right", 
+        legend.text = element_text(size=12, face="bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.text = element_text(color = "black", size = 12, face = "bold"),
+        axis.title = element_text(color = "black", size = 12, face = "bold"),
+        plot.title = element_text(hjust = 0.5, size=14, face="bold"))
+pdf(paste0(AbundanceAV216s, "PlotAmpHMP_GP.pdf"), width=20, height=10)
+AmpHMP_GP 
+dev.off()
+svg(paste0(AbundanceAV216s, "PlotAmpHMP_GP.svg"), width=20, height=10)
+AmpHMP_GP 
+dev.off()
+
+# Phylum
+AmpHMP_P <- amp_heatmap(AV2P, 
+            group_by = "SITE_ID", facet_by = "SITE_ID", plot_values = TRUE,
+            tax_show = 15, tax_aggregate = "Phylum",
+            # color_vector = c("lightblue3", "olivedrab3"),
+            plot_colorscale = "sqrt", plot_legendbreaks = c(0, 5, 10, 20, 35, 40)) +
+  labs(title="Relative abundance for Phylum")+
+  theme(legend.position = "right", 
+        legend.text = element_text(size=12, face="bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.text = element_text(color = "black", size = 12, face = "bold"),
+        axis.title = element_text(color = "black", size = 12, face = "bold"),
+        plot.title = element_text(hjust = 0.5, size=14, face="bold"))
+pdf(paste0(AbundanceAV216s, "PlotAmpHMP_P.pdf"), width=20, height=10)
+AmpHMP_P 
+dev.off()
+svg(paste0(AbundanceAV216s, "PlotAmpHMP_P.svg"), width=20, height=10)
+AmpHMP_P 
+dev.off()
+
+# Genus
+AmpHMP_G <- amp_heatmap(AV2P, 
+            group_by = "SITE_ID", facet_by = "SITE_ID", plot_values = TRUE,
+            tax_show = 15, tax_aggregate = "Genus",
+            # color_vector = c("lightblue3", "olivedrab3"),
+            plot_colorscale = "sqrt", plot_legendbreaks = c(0, 0.5, 1, 1.5, 2, 2.5, 3.0)) +
+  labs(title="Relative abundance for Genus")+
+  theme(legend.position = "right", 
+        legend.text = element_text(size=12, face="bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.text = element_text(color = "black", size = 12, face = "bold"),
+        axis.title = element_text(color = "black", size = 12, face = "bold"),
+        plot.title = element_text(hjust = 0.5, size=14, face="bold"))
+pdf(paste0(AbundanceAV216s, "PlotAmpHMP_G.pdf"), width=20, height=10)
+AmpHMP_G 
+dev.off()
+svg(paste0(AbundanceAV216s, "PlotAmpHMP_G.svg"), width=20, height=10)
+AmpHMP_G
+dev.off()
+
+# Version 2 - Genus
+# Phylum and genus
+AmpHMG_GP <- amp_heatmap(AV2G, 
+            group_by = "SITE_ID", facet_by = "SITE_ID", plot_values = TRUE,
+            tax_show = 15, tax_aggregate = "Genus", tax_add = "Phylum",
+            # color_vector = c("lightblue3", "olivedrab3"),
+            plot_colorscale = "sqrt", plot_legendbreaks = c(0, 1.0, 2.0, 4.0, 6.0, 8.0)) +
+  labs(title="Relative abundance for Phylum and genus")+
+  theme(legend.position = "right", 
+        legend.text = element_text(size=12, face="bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.text = element_text(color = "black", size = 12, face = "bold"),
+        axis.title = element_text(color = "black", size = 12, face = "bold"),
+        plot.title = element_text(hjust = 0.5, size=14, face="bold"))
+pdf(paste0(AbundanceAV216s, "PlotAmpHMG_GP.pdf"), width=20, height=10)
+AmpHMG_GP 
+dev.off()
+svg(paste0(AbundanceAV216s, "PlotAmpHMG_GP.svg"), width=20, height=10)
+AmpHMG_GP 
+dev.off()
+
+# Phylum
+AmpHMG_P <- amp_heatmap(AV2G, 
+            group_by = "SITE_ID", facet_by = "SITE_ID", plot_values = TRUE,
+            tax_show = 15, tax_aggregate = "Phylum",
+            # color_vector = c("lightblue3", "olivedrab3"),
+            plot_colorscale = "sqrt", plot_legendbreaks = c(0, 1, 5, 10, 20, 35)) +
+  labs(title="Relative abundance for Phylum")+
+  theme(legend.position = "right", 
+        legend.text = element_text(size=12, face="bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.text = element_text(color = "black", size = 12, face = "bold"),
+        axis.title = element_text(color = "black", size = 12, face = "bold"),
+        plot.title = element_text(hjust = 0.5, size=14, face="bold"))
+pdf(paste0(AbundanceAV216s, "PlotAmpHMG_P.pdf"), width=20, height=10)
+AmpHMG_P 
+dev.off()
+svg(paste0(AbundanceAV216s, "PlotAmpHMG_P.svg"), width=20, height=10)
+AmpHMG_P 
+dev.off()
+
+# Genus
+AmpHMG_G <- amp_heatmap(AV2G, 
+            group_by = "SITE_ID", facet_by = "SITE_ID", plot_values = TRUE,
+            tax_show = 15, tax_aggregate = "Genus",
+            # color_vector = c("lightblue3", "olivedrab3"),
+            plot_colorscale = "sqrt", plot_legendbreaks = c(0, 1.0, 2.0, 4.0, 6.0, 8.0)) +
+  labs(title="Relative abundance for Genus")+
+  theme(legend.position = "right", 
+        legend.text = element_text(size=12, face="bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.text = element_text(color = "black", size = 12, face = "bold"),
+        axis.title = element_text(color = "black", size = 12, face = "bold"),
+        plot.title = element_text(hjust = 0.5, size=14, face="bold"))
+pdf(paste0(AbundanceAV216s, "PlotAmpHMG_G.pdf"), width=20, height=10)
+AmpHMG_G 
+dev.off()
+svg(paste0(AbundanceAV216s, "PlotAmpHMG_G.svg"), width=20, height=10)
+AmpHMG_G
+dev.off()
+```
+
+# Pheatmap
+
+To obtain the dominant taxa, we will only keep the OTUs whose readings are greater than 100 aboslute or which are present in a percentage greater than 1 % of relative readings.
+It is necessary that our phyloseq object contains the "**otu_table**" table with the following structure 
+- Rows with OTUs 
+- Columns with Samples
+
+```{r, message = FALSE, warning = FALSE}
+# Version 1 - Phylum
+PhyloP <- merge_phyloseq(otu_table(t(Phylo_P@otu_table@.Data), taxa_are_rows = T), 
+                       Phylo_P@tax_table, 
+                       Phylo_P@sam_data, 
+                       Phylo_P@phy_tree, 
+                       Phylo_P@refseq)
+head(PhyloP@otu_table@.Data)
+summary(PhyloP@otu_table@.Data) 
+
+# Version 2 - Genus
+PhyloG <- merge_phyloseq(otu_table(t(Phylo_G@otu_table@.Data), taxa_are_rows = T), 
+                       Phylo_G@tax_table, 
+                       Phylo_G@sam_data, 
+                       Phylo_G@phy_tree, 
+                       Phylo_G@refseq)
+head(PhyloG@otu_table@.Data)
+summary(PhyloG@otu_table@.Data) 
+```
+
+Because the analysis at the "Specie" level is not as reliable, we stay at the genus level and this also makes those of the same genus into one.
+
+```{r, message = FALSE, warning = FALSE}
+# Version 1 - Phylum
+PhyloseqP <- tax_glom(PhyloP,taxrank = rank_names(PhyloP)[6]) 
+summary(PhyloseqP@otu_table@.Data)
+
+# Version 2 - Genus
+PhyloseqG <- tax_glom(PhyloG,taxrank = rank_names(PhyloG)[6]) 
+summary(PhyloseqG@otu_table@.Data)
+
+# HERE VERSION 1 AND 2 BECOME THE SAME
+```
+
+From now on, we work with relative values and absolute values.
+
+```{r, message = FALSE, warning = FALSE}
+# Absolute
+# Filtramos aquellos géneros que tienen una media mínima de 100 lecturas absolutas
+psd.abs.100P <- filter_taxa(PhyloseqP, function(x) mean(x) > 100.0, TRUE)
+
+# Relative
+psd.relP <- transform_sample_counts(PhyloseqP, function(x) x*100 / sum(x))
+psd.rel.1P <- filter_taxa(psd.relP, function(x) mean(x) > 1.0, TRUE)
+```
+
+The pheatmap package needs a dataframe as input, so we'll make some from the phyloseq object
+
+```{r, message = FALSE, warning = FALSE}
+# Absolute
+psd.abs.100P
+psd.abs.dfP <- as.data.frame(psd.abs.100P@otu_table@.Data)
+dim(psd.abs.dfP)
+rownames(psd.abs.dfP) <- make.names(psd.abs.100P@tax_table@.Data[,6], unique = T)
+str(psd.abs.dfP)
+
+#Relativos
+psd.rel.1P
+psd.rel.dfP <- as.data.frame(psd.rel.1P@otu_table@.Data)
+dim(psd.rel.dfP)
+rownames(psd.rel.dfP) <- make.names(psd.rel.1P@tax_table@.Data[,6], unique = T)
+str(psd.rel.dfP)
+```
+
+New data frame where we will assign the metadata we want to display in the pheatmap
+
+```{r, message = FALSE, warning = FALSE}
+meta <- data.frame(Year = metadata$YEAR, row.names = rownames(metadata))
+#meta$ID <- ID=metadata$ID
+#meta$pH <- metadata$pH
+#meta$N_Total <- metadata$N_TOTAL
+#meta$P_Olsen <- metadata$P_OLSEN
+#meta$Organic <- metadata$ORGANIC
+meta$Site <- metadata$SITE_ID
+str(meta)
+```
+
+Color list
+
+```{r, message = FALSE, warning = FALSE}
+Color <- list(#ID=c("Ag2_Sep17"="antiquewhite", "Ag3_Sep17"="cadetblue1",
+                  #    "Ag1_Sep17"="chartreuse", "Ag3_Sep18"="azure4", 
+                  #    "Ag3_Jun19"="coral", "Ag2_Sep19"="bisque3",
+                  #    "Ag2_Sep18"="bisque3", "Ag3_Sep19"="darkcyan",
+                  #    "Ag1_Sep18"="darkmagenta", "Ag1_Sep19"="deepskyblue3"),
+                 Year = c("2017"="deepskyblue3", "2018"="indianred4", "2019"="purple4"),
+                 #pH=c("6.7"="#bababa", "6.1"="brown4", "6.2"="#377eb8"),
+                 #N_Total = c("0.22"="darkolivegreen", "0.29"="#984ea3", "0.36"="darkgoldenrod3"),
+                 #P_Oolse = c("13.5"="darkred", "4.0"="deeppink4", "29.6"="aquamarine4"),
+                 #Organic = c("13.5"="darkseagreen4", "24.2"="gold4", "12.0"="gray"),
+                 Site = c("Ag1"="lightseagreen", "Ag2"="midnightblue", "Ag3"="mediumvioletred"))
+# Color Pheatmap
+ColorHPM <- c("#ffffff","#fff7fb","#ece2f0","#d0d1e6","#a6bddb","#67a9cf","#3690c0",
+                    "#02818a","#016c59","#014636")
+```
+
+Plot
+
+```{r}
+# Aboslute
+PHMap.AbsP <- pheatmap(main = "Absolute values at the taxonomic level of Genus", 
+                      psd.abs.dfP, color = ColorHPM, cluster_cols = TRUE, 
+                      cutree_cols = 3, cutree_rows = 4, border_color ="#000000",
+                      annotation_col = meta, annotation_colors = Color)
+PHMap.AbsP
+pdf(paste0(Results16s, "PlotPHMap.Abs_P.pdf"), width=20, height=10)
+PHMap.AbsP
+dev.off()
+svg(paste0(Results16s, "PlotPHMap.Abs_P.svg"), width=20, height=10)
+PHMap.AbsP
+dev.off()
+
+# Relative
+PHMap.RelP <- pheatmap(main = "Relative values at the taxonomic level of Genus",
+                      psd.rel.dfP, color = ColorHPM, cluster_cols = TRUE, 
+                      cutree_cols = 3, cutree_rows = 4, border_color ="#000000",
+                      annotation_col = meta, annotation_colors = Color)
+PHMap.RelP
+pdf(paste0(Results16s, "PlotPHMap.Rel_P.pdf"), width=20, height=10)
+PHMap.RelP
+dev.off()
+svg(paste0(Results16s, "PlotPHMap.Rel_P.svg"), width=20, height=10)
+PHMap.RelP
+dev.off()
+```
+
+# Metagenomic analysis with Shotgun sequencing data
+
+## Set working directory
+
+```{r}
+# Shotgun
+Shotgun <- "Shotgun/"
+dir.create(Shotgun)
+ResultsSG <- paste0(Shotgun, "Results/")
+dir.create(ResultsSG)
+AbundanceSG <- paste0(ResultsSG, "Abundance/")
+dir.create(AbundanceSG)
+AbundanceAV2SG <- paste0(ResultsSG, "AbundanceAV2/")
+dir.create(AbundanceAV2SG)
+DiversitySG <- paste0(ResultsSG, "Diversity/")
+dir.create(DiversitySG)
+AlphaSG <- paste0(DiversitySG, "Alpha/")
+dir.create(AlphaSG)
+BetaSG <- paste0(DiversitySG, "Beta/")
+dir.create(BetaSG)
+```
+
+# Import and manipulation of kraken-biom file
+
+We put to the variable merged_metagenomes the result of kraken-biom, this results in a phyloseq object.
+
+```{r}
+merged_metagenomes <- import_biom(paste0(Shotgun, "Biom/CalakmulShotGun.biom"))
+class(merged_metagenomes)
+head(merged_metagenomes@tax_table@.Data)
+```
+
+In the data, the name as such starts with the letter number 4, it has 3 before, for example "k__", with the following command we eliminate these 3 first letters and it starts with the 4th letter.
+
+```{r}
+merged_metagenomes@tax_table@.Data <- substring(merged_metagenomes@tax_table@.Data, 4)
+colnames(merged_metagenomes@tax_table@.Data) <- c("Kingdom", "Phylum", "Class", "Order", "Family", "Genus", "Species")
+head(merged_metagenomes@tax_table@.Data)
+TablaMergedMetagenomes <- merged_metagenomes@tax_table@.Data
+write.table(TablaMergedMetagenomes, 
+            file = paste0(Shotgun, "CalakmulTablaMergedMetagenomes.txt"), 
+            row.names=TRUE, col.names=NA, quote=FALSE, sep="\t")
+```
+
+As in Kingdom there are "only" bacteria, we are going to keep only that, and thus remove what does not fall into this category.
+
+```{r}
+merged_metagenomes <- subset_taxa(merged_metagenomes, Kingdom == "Bacteria")
+```
+
+Metadata
+
+```{r}
+MetaShotgun <- data.frame(SAMPLE=c("Ag1", "Ag2", "Ag3"), 
+                          SITE=c("2", "3", "1"), 
+                          pH=c(6.2, 6.7, 6.1), 
+                          N_TOTAL=c(0.36, 0.22, 0.29),
+                          P_OLSEN=c(29.6, 13.5, 4.0),
+                          ORGANIC=c(12.0, 13.5, 24.2),
+                          SITE_ID=c("Ag1", "Ag2", "Ag3"))
+rownames(MetaShotgun) <- MetaShotgun$SAMPLE
+rownames(merged_metagenomes) %in% rownames(MetaShotgun)
+all(rownames(merged_metagenomes) %in% MetaShotgun$SAMPLE)
+merged_metagenomes@sam_data <- sample_data(MetaShotgun)
+```
+
+# Assembly and manipulation of **Phyloseq objects**. 
+
+Phyloseq object overview
+
+```{r}
+merged_metagenomes 
+sample_sums(merged_metagenomes)
+summary(merged_metagenomes@otu_table@.Data) 
+```
+
+Read´s Plot
+
+```{r}
+deep <- data.frame(Samples = sample_names(merged_metagenomes),
+                    Reads = sample_sums(merged_metagenomes)/1000000)
+deep
+COLOR = c("#a6cee3", "#b2df8a", "#fdbf6f")
+plot.reads <- ggplot(data = deep, mapping = aes(x = Samples, y = Reads, fill = Samples)) +
+  theme_classic() +
+  labs(x="Samples", y="Million reads",
+       title = "Total readings of analyzed samples") +
+  theme(legend.position = "right", 
+        legend.text = element_text(size=12, face="bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        axis.text = element_text(color = "black", size = 12, face = "bold"),
+        axis.title = element_text(color = "black", size = 12, face = "bold"),
+        plot.title = element_text(hjust = 0.5, size=14, face="bold")) +
+  geom_col(position = position_dodge(0.9), width = 0.9) +
+  scale_fill_brewer(palette = "Set1")
+plot.reads
+pdf(paste0(ResultsSG, "PlotReads.pdf"), width=20, height=10)
+plot.reads
+dev.off()
+svg(paste0(ResultsSG, "PlotReads.svg"), width=20, height=10)
+plot.reads
+dev.off()
+```
+
+## Data transformation and manipulation
+
+We continue looking at the phyloseq object
+
+```{r, message = FALSE, warning = FALSE}
+summary(merged_metagenomes@tax_table@.Data== "") 
+merged_metagenomes <- prune_taxa(taxa_sums(merged_metagenomes) > 0, merged_metagenomes)
+Phylo_P <- subset_taxa(merged_metagenomes, Phylum != "")
+Phylo_G <- subset_taxa(merged_metagenomes, Genus != "")
+summary(Phylo_P@tax_table@.Data== "") 
+summary(Phylo_G@tax_table@.Data== "") 
+Phylum <- tax_glom(physeq = Phylo_P, taxrank = 'Phylum', NArm = F)
+Genus <- tax_glom(physeq = Phylo_G, taxrank = 'Genus', NArm = F)
+```
+
+### Absolute and relative data
+
+We generate a table of absolute and relative data at the "Phylum" level, for further analysis.
+
+```{r, message = FALSE, warning = FALSE}
+Phylum_R <- transform_sample_counts(Phylum, function(x) x*100 / sum(x))
+Genus_R <- transform_sample_counts(Genus, function(x) x*100 / sum(x))
+
+# Absolute
+Phylum_A_DF <- psmelt(Phylum)
+Genus_A_DF <- psmelt(Genus)
+Phylum_A_DF$Phylum <- as.character(Phylum_A_DF$Phylum) 
+Genus_A_DF$Genus <- as.character(Genus_A_DF$Genus)
+Genus_A_DF$Family <- as.character(Genus_A_DF$Family)
+Phylum_A_DF$Phylum[Phylum_A_DF$Abundance < 10000] <- "Phylum < 10000 abundance"
+Genus_A_DF$Phylum[Genus_A_DF$Abundance < 10000] <- "Phylum < 10000 abundance"
+Genus_A_DF$Family[Genus_A_DF$Abundance < 25000] <- "Family < 25000 abundance"
+Genus_A_DF$Genus[Genus_A_DF$Abundance < 25000] <- "Genus < 25000 abundance"
+# Phylum_A_DF <- filter(Phylum_A_DF, Phylum_A_DF$Phylum != "Phylum < 10000 abundance") 
+# Genus_A_DF <- filter(Genus_A_DF, Genus_A_DF$Phylum != "Phylum < 10000 abundance")
+# Genus_A_DF <- filter(Genus_A_DF, Genus_A_DF$Family != "Family < 25000 abundance")
+# Genus_A_DF <- filter(Genus_A_DF, Genus_A_DF$Genus != "Genus < 25000 abundance")
+
+# Relative
+Phylum_R_DF <- psmelt(Phylum_R)
+Genus_R_DF <- psmelt(Genus_R)
+Phylum_R_DF$Phylum <- as.character(Phylum_R_DF$Phylum) 
+Genus_R_DF$Genus <- as.character(Genus_R_DF$Genus)
+Genus_R_DF$Family <- as.character(Genus_R_DF$Family)
+Phylum_R_DF$Phylum[Phylum_R_DF$Abundance < 0.5] <- "Phylum < 0.5% abundance"
+Genus_R_DF$Phylum[Genus_R_DF$Abundance < 0.5] <- "Phylum < 0.5% abundance"
+Genus_R_DF$Family[Genus_R_DF$Abundance < 1.5] <- "Family < 1.5% abundance"
+Genus_R_DF$Genus[Genus_R_DF$Abundance < 1.5] <- "Genus < 1.5% abundance"
+# Phylum_R_DF <- filter(Phylum_R_DF, Phylum_R_DF$Phylum != "Phylum < 0.5% abundance")
+# Genus_R_DF <- filter(Genus_R_DF, Genus_R_DF$Phylum != "Phylum < 0.5% abundance")
+# Genus_R_DF <- filter(Genus_R_DF, Genus_R_DF$Family != "Family < 1.5% abundance")
+# Genus_R_DF <- filter(Genus_R_DF, Genus_R_DF$Genus != "Genus < 1.5% abundance")
+```
+
+#### Graphs of absolute and relative values
+
+In X axis we use the variable "SITE_ID", and in Y is "Abundance" and fill by "Phylum".
+
+```{r}
+# Version 1 - Phylum
+Abs.plot.P.P <- ggplot(data = Phylum_A_DF, aes(x = SITE_ID, y = Abundance, fill = Phylum)) + 
+  geom_bar(aes(), stat = "identity", position = "stack") + 
+  theme_classic() +
+  labs(x = "Samples", y = "Absolute abundance",
+       title = "Absolute abundance of analyzed samples") +
+  theme(legend.position = "right", 
+        legend.text = element_text(size = 12, face = "bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        axis.text = element_text(color = "black", size = 12, face = "bold"),
+        axis.title = element_text(color = "black", size = 12, face = "bold"),
+        plot.title = element_text(hjust = 0.5, size = 14, face = "bold"))
+Abs.plot.P.P
+
+Rel.plot.P.P <- ggplot(data = Phylum_R_DF, aes(x = SITE_ID, y = Abundance, fill = Phylum)) + 
+  geom_bar(aes(), stat = "identity", position = "fill") + 
+  theme_classic() +
+  labs(x = "Samples", y = "Relative abundance",
+       title = "Relative abundance of analyzed samples") +
+  theme(legend.position = "right", 
+        legend.text = element_text(size = 12, face = "bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        axis.text = element_text(color = "black", size = 12, face = "bold"),
+        axis.title = element_text(color = "black", size = 12, face = "bold"),
+        plot.title = element_text(hjust = 0.5, size = 14, face = "bold"))
+Rel.plot.P.P
+
+Abs.plot.P.P | Rel.plot.P.P
+
+pdf(paste0(AbundanceSG, "PlotRawPhylumP.pdf"), width=20, height=10)
+Abs.plot.P.P
+dev.off()
+svg(paste0(AbundanceSG, "PlotRawPhylumP.svg"), width=20, height=10)
+Abs.plot.P.P
+dev.off()
+pdf(paste0(AbundanceSG, "PlotRelPhylumP.pdf"), width=20, height=10)
+Rel.plot.P.P
+dev.off()
+svg(paste0(AbundanceSG, "PlotRelPhylumP.svg"), width=20, height=10)
+Rel.plot.P.P
+dev.off()
+pdf(paste0(AbundanceSG, "PlotRaw-RelPhylumP.pdf"), width=20, height=10)
+Abs.plot.P.P | Rel.plot.P.P
+dev.off()
+svg(paste0(AbundanceSG, "PlotRaw-RelPhylumP.svg"), width=20, height=10)
+Abs.plot.P.P | Rel.plot.P.P
+dev.off()
+
+# Version 2 - Genus
+
+Abs.plot.G.P <- ggplot(data = Genus_A_DF, aes(x = SITE_ID, y = Abundance, fill = Phylum)) + 
+  geom_bar(aes(), stat = "identity", position = "stack") + 
+  theme_classic() +
+  labs(x = "Samples", y = "Absolute abundance",
+       title = "Absolute abundance of analyzed samples") +
+  theme(legend.position = "right", 
+        legend.text = element_text(size = 12, face = "bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        axis.text = element_text(color = "black", size = 12, face = "bold"),
+        axis.title = element_text(color = "black", size = 12, face = "bold"),
+        plot.title = element_text(hjust = 0.5, size = 14, face = "bold"))
+Abs.plot.G.P
+
+Rel.plot.G.P <- ggplot(data = Genus_R_DF, aes(x = SITE_ID, y = Abundance, fill = Phylum)) + 
+  geom_bar(aes(), stat = "identity", position = "fill") + 
+  theme_classic() +
+  labs(x = "Samples", y = "Relative abundance",
+       title = "Relative abundance of analyzed samples") +
+  theme(legend.position = "right", 
+        legend.text = element_text(size = 12, face = "bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        axis.text = element_text(color = "black", size = 12, face = "bold"),
+        axis.title = element_text(color = "black", size = 12, face = "bold"),
+        plot.title = element_text(hjust = 0.5, size = 14, face = "bold"))
+Rel.plot.G.P
+
+Abs.plot.G.P | Rel.plot.G.P
+
+pdf(paste0(AbundanceSG, "PlotRawPhylumG.pdf"), width=20, height=10)
+Abs.plot.G.P
+dev.off()
+svg(paste0(AbundanceSG, "PlotRawPhylumG.svg"), width=20, height=10)
+Abs.plot.G.P
+dev.off()
+pdf(paste0(AbundanceSG, "PlotRelPhylumG.pdf"), width=20, height=10)
+Rel.plot.G.P
+dev.off()
+svg(paste0(AbundanceSG, "PlotRelPhylumG.svg"), width=20, height=10)
+Rel.plot.G.P
+dev.off()
+pdf(paste0(AbundanceSG, "PlotRaw-RelPhylumG.pdf"), width=20, height=10)
+Abs.plot.G.P | Rel.plot.G.P
+dev.off()
+svg(paste0(AbundanceSG, "PlotRaw-RelPhylumG.svg"), width=20, height=10)
+Abs.plot.G.P | Rel.plot.G.P
+dev.off()
+```
+
+In X axis we use the variable "SITE_ID", and in Y is "Abundance" and we fill by "Family".
+
+```{r}
+# Version 2 - Genus
+Abs.plot.G.F <- ggplot(data = Genus_A_DF, aes(x = SITE_ID, y = Abundance, fill = Family)) + 
+  geom_bar(aes(), stat = "identity", position = "stack") + 
+  theme_classic() +
+  labs(x = "Samples", y = "Absolute abundance",
+       title = "Absolute abundance of analyzed samples") +
+  theme(legend.position = "right", 
+        legend.text = element_text(size = 12, face = "bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        axis.text = element_text(color = "black", size = 12, face = "bold"),
+        axis.title = element_text(color = "black", size = 12, face = "bold"),
+        plot.title = element_text(hjust = 0.5, size = 14, face = "bold"))
+Abs.plot.G.F 
+
+Rel.plot.G.F <- ggplot(data = Genus_R_DF, aes(x = SITE_ID, y = Abundance, fill = Family)) + 
+  geom_bar(aes(), stat = "identity", position = "fill") + 
+  theme_classic() +
+  labs(x = "Samples", y = "Relative abundance",
+       title = "Relative abundance of analyzed samples") +
+  theme(legend.position = "right", 
+        legend.text = element_text(size = 12, face = "bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        axis.text = element_text(color = "black", size = 12, face = "bold"),
+        axis.title = element_text(color = "black", size = 12, face = "bold"),
+        plot.title = element_text(hjust = 0.5, size = 14, face = "bold"))
+Rel.plot.G.F
+
+Abs.plot.G.F | Rel.plot.G.F
+
+pdf(paste0(AbundanceSG, "PlotRawFamilyG.pdf"), width=20, height=10)
+Abs.plot.G.F
+dev.off()
+svg(paste0(AbundanceSG, "PlotRawFamilyG.svg"), width=20, height=10)
+Abs.plot.G.F
+dev.off()
+pdf(paste0(AbundanceSG, "PlotRelFamilyG.pdf"), width=20, height=10)
+Rel.plot.G.F
+dev.off()
+svg(paste0(AbundanceSG, "PlotRelFamilyG.svg"), width=20, height=10)
+Rel.plot.G.F
+dev.off()
+pdf(paste0(AbundanceSG, "PlotRaw-RelFamilyG.pdf"), width=20, height=10)
+Abs.plot.G.F | Rel.plot.G.F
+dev.off()
+svg(paste0(AbundanceSG, "PlotRaw-RelFamilyG.svg"), width=20, height=10)
+Abs.plot.G.F | Rel.plot.G.F
+dev.off()
+```
+
+In X axis we use the variable "SITE_ID", and in Y is "Abundance" and fill by "Genus".
+
+```{r}
+# Version 2 - Genus
+Abs.plot.G.G <- ggplot(data = Genus_A_DF, aes(x = SITE_ID, y = Abundance, fill = Genus)) + 
+  geom_bar(aes(), stat = "identity", position = "stack") + 
+  theme_classic() +
+  labs(x = "Samples", y = "Absolute abundance",
+       title = "Absolute abundance of analyzed samples") +
+  theme(legend.position = "right", 
+        legend.text = element_text(size = 12, face = "bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        axis.text = element_text(color = "black", size = 12, face = "bold"),
+        axis.title = element_text(color = "black", size = 12, face = "bold"),
+        plot.title = element_text(hjust = 0.5, size = 14, face = "bold"))
+Abs.plot.G.G
+
+Rel.plot.G.G <- ggplot(data = Genus_R_DF, aes(x = SITE_ID, y = Abundance, fill = Genus)) + 
+  geom_bar(aes(), stat = "identity", position = "fill") + 
+  theme_classic() +
+  labs(x = "Samples", y = "Relative abundance",
+       title = "Relative abundance of analyzed samples") +
+  theme(legend.position = "right", 
+        legend.text = element_text(size = 12, face = "bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        axis.text = element_text(color = "black", size = 12, face = "bold"),
+        axis.title = element_text(color = "black", size = 12, face = "bold"),
+        plot.title = element_text(hjust = 0.5, size = 14, face = "bold"))
+Rel.plot.G.G
+
+Abs.plot.G.G | Rel.plot.G.G
+
+pdf(paste0(AbundanceSG, "PlotRawGenusG.pdf"), width=20, height=10)
+Abs.plot.G.G
+dev.off()
+svg(paste0(AbundanceSG, "PlotRawGenusG.svg"), width=20, height=10)
+Abs.plot.G.G
+dev.off()
+pdf(paste0(AbundanceSG, "PlotRelGenusG.pdf"), width=20, height=10)
+Rel.plot.G.G
+dev.off()
+svg(paste0(AbundanceSG, "PlotRelGenusG.svg"), width=20, height=10)
+Rel.plot.G.G
+dev.off()
+pdf(paste0(AbundanceSG, "PlotRaw-RelGenusG.pdf"), width=20, height=10)
+Abs.plot.G.G | Rel.plot.G.G
+dev.off()
+svg(paste0(AbundanceSG, "PlotRaw-RelGenusG.svg"), width=20, height=10)
+Abs.plot.G.G | Rel.plot.G.G
+dev.off()
+```
+
+## Abundances 
+
+We plot with ggplot2 to see the behavior of the readings in each of the samples.
+
+```{r}
+deep <- data.frame(Samples = merged_metagenomes@sam_data@.Data[[1]],
+                   Reads = sample_sums(merged_metagenomes))
+deep
+
+plot.reads <- ggplot(data = deep, mapping = aes(x = Samples, y = Reads, fill = Samples)) +
+  theme_classic() +
+  labs(x="Samples", y="Reads",
+       title = "Total readings of analyzed samples") +
+  theme(legend.position = "right", 
+        legend.text = element_text(size=12, face="bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        axis.text = element_text(color = "black", size = 12, face = "bold"),
+        axis.title = element_text(color = "black", size = 12, face = "bold"),
+        axis.text.x = element_text(angle = 45, vjust = 1, hjust=1),
+        plot.title = element_text(hjust = 0.5, size=14, face="bold")) +
+  geom_col(position = position_dodge(0.9), width = 0.9) +
+  scale_fill_brewer(palette = "Paired")
+plot.reads
+pdf(paste0(AbundanceSG, "PlotReads.pdf"), width=20, height=10)
+plot.reads
+dev.off()
+svg(paste0(AbundanceSG, "PlotReads.svg"), width=20, height=10)
+plot.reads
+dev.off()
+```
+
+## Diversity analysis
+
+## Alpha diversity
+
+```{r}
+# Version 1 - Phylum
+alfa.diverP <- plot_richness(physeq = Phylo_P, 
+              color =  "SITE_ID",
+              x = "SITE_ID",
+              measures = c("Observed", "Chao1", "ACE", "Shannon", "Simpson", "Fisher"),
+              title = "Alpha diversity indices for the Calakmul samples obtained by Shotgun") + 
+  labs(x="Samples", y="Alpha Diversity Measure") +
+  theme(legend.position = "right", 
+        legend.text = element_text(size=12, face="bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        axis.text = element_text(color = "black", size = 12, face = "bold"),
+        axis.title = element_text(color = "black", size = 12, face = "bold"),
+        plot.title = element_text(hjust = 0.5, size=14, face="bold")) +
+  geom_boxplot(aes(fill = SITE_ID), alpha=.7) + 
+  scale_color_brewer(palette = "Set1") + 
+  scale_fill_brewer(palette = "Set1")
+alfa.diverP
+pdf(paste(AlphaSG, "PlotAlfaP.pdf"), width=20, height=10)
+alfa.diverP
+dev.off()
+svg(paste(AlphaSG, "PlotAlfaP.svg"), width=20, height=10)
+alfa.diverP
+dev.off()
+
+## Version 2 - Genus
+alfa.diverG <- plot_richness(physeq = Phylo_G, 
+              color =  "SITE_ID",
+              x = "SITE_ID",
+              measures = c("Observed", "Chao1", "ACE", "Shannon", "Simpson", "Fisher"),
+              title = "Alpha diversity indices for the Calakmul samples obtained by Shotgun") + 
+  labs(x="Samples", y="Alpha Diversity Measure") +
+  theme(legend.position = "right", 
+        legend.text = element_text(size=12, face="bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        axis.text = element_text(color = "black", size = 12, face = "bold"),
+        axis.title = element_text(color = "black", size = 12, face = "bold"),
+        plot.title = element_text(hjust = 0.5, size=14, face="bold")) +
+  geom_boxplot(aes(fill = SITE_ID), alpha=.7) + 
+  scale_color_brewer(palette = "Set1") + 
+  scale_fill_brewer(palette = "Set1")
+alfa.diverG
+pdf(paste(AlphaSG, "PlotAlfaG.pdf"), width=20, height=10)
+alfa.diverG
+dev.off()
+svg(paste(AlphaSG, "PlotAlfaG.svg"), width=20, height=10)
+alfa.diverG
+dev.off()
+```
+
+## Beta diversity
+
+```{r}
+Ordenacion <- c("NMDS", "MDS")
+Distancia <- c("bray", "jsd", "jaccard")
+
+# Version 1 - Phylum
+Phylo_P.2@sam_data@.Data[[6]] <- as.factor(Phylo_P.2@sam_data@.Data[[6]])
+for (o in Ordenacion){
+  # Prueba 
+  # o <- "NMDS"
+  for (d in Distancia){
+    # Prueba 
+    # d <- "bray"
+    Ord <- ordinate(physeq = Phylo_P.2, method = o, distance = d)
+    Beta <- plot_ordination(physeq = Phylo_P.2, ordination = Ord, 
+                            color = "SITE_ID", shape = "YEAR") +
+      theme_classic() +
+      geom_point(size = 5) +
+      geom_text(mapping = aes(label = SITE_ID), size = 4, vjust = 2, hjust = 1) + 
+      geom_vline(xintercept = 0) +
+      geom_hline(yintercept = 0) +
+      labs(title = paste("Beta diversity with", o, "-", d, 
+                         "for the Calakmul samples rRNA Shotgun")) +
+             theme(legend.position = "right", 
+                   legend.text = element_text(size=12, face="bold"),
+                   legend.title = element_text(size = 12, face = "bold"),
+                   axis.text = element_text(color = "black", size = 12, face = "bold"),
+                   axis.title = element_text(color = "black", size = 12, face = "bold"),
+                   plot.title = element_text(hjust = 0.5, size=14, face="bold")) +
+             scale_color_brewer(palette = "Set1") + 
+             scale_fill_brewer(palette = "Set1")
+    print(Beta)
+    pdf(paste0(BetaSG, "PlotBeta", o, "-", d, "-P.pdf"), 
+        width=20, height=10)
+    print(Beta)
+    dev.off()
+    svg(paste0(BetaSG, "PlotBeta", o, "-", d, "-P.svg"),
+        width=20, height=10)
+    print(Beta)
+    dev.off()
+  }
+}
+
+# Version 1 - Phylum
+Phylo_G.2@sam_data@.Data[[6]] <- as.factor(Phylo_G.2@sam_data@.Data[[6]])
+for (o in Ordenacion){
+  # Prueba 
+  # o <- "NMDS"
+  for (d in Distancia){
+    # Prueba 
+    # d <- "bray"
+    Ord <- ordinate(physeq = Phylo_G.2, method = o, distance = d)
+    Beta <- plot_ordination(physeq = Phylo_G.2, ordination = Ord, 
+                            color = "SITE_ID", shape = "YEAR") +
+      theme_classic() +
+      geom_point(size = 5) +
+      geom_text(mapping = aes(label = SITE_ID), size = 4, vjust = 2, hjust = 1) + 
+      geom_vline(xintercept = 0) +
+      geom_hline(yintercept = 0) +
+      labs(title = paste("Beta diversity with", o, "-", d, 
+                         "for the Calakmul samples Shotgun")) +
+             theme(legend.position = "right", 
+                   legend.text = element_text(size=12, face="bold"),
+                   legend.title = element_text(size = 12, face = "bold"),
+                   axis.text = element_text(color = "black", size = 12, face = "bold"),
+                   axis.title = element_text(color = "black", size = 12, face = "bold"),
+                   plot.title = element_text(hjust = 0.5, size=14, face="bold")) +
+             scale_color_brewer(palette = "Set1") + 
+             scale_fill_brewer(palette = "Set1")
+    print(Beta)
+    pdf(paste0(BetaSG, "PlotBeta", o, "-", d, "-G.pdf"), 
+        width=20, height=10)
+    print(Beta)
+    dev.off()
+    svg(paste0(BetaSG, "PlotBeta", o, "-", d, "-G.svg"),
+        width=20, height=10)
+    print(Beta)
+    dev.off()
+  }
+}
+```
+
+### Diferentes visualizaciones de abundancias
+
+Veamos ahora otras herramientas que nos permiten examinar la composición de estas comunidades microbianas. El paquete ampvis2, desarrollado por Mads Albertsen y Kasper Skytte Andersen, nos permite hacer precisamente esto. Primero transformemos el objeto phyloseq con el cual hemos estado trabajando en un objeto ampvis2.
+
+```{r, message = FALSE, warning = FALSE}
+library(ampvis2)
+Phylo_P.2 <- prune_taxa(taxa_sums(Phylo_P) > 0, Phylo_P)
+objP <- Phylo_P.2
+otutableP <- data.frame(OTU = rownames(phyloseq::otu_table(objP)@.Data),
+                       phyloseq::otu_table(objP)@.Data,
+                       phyloseq::tax_table(objP)@.Data,
+                       check.names = FALSE)
+metadataP <- data.frame(phyloseq::sample_data(objP), 
+                       check.names = FALSE)
+
+# Version 2 - Genus
+Phylo_G.2 <- prune_taxa(taxa_sums(Phylo_G) > 0, Phylo_G)
+objG <- Phylo_G.2
+otutableG <- data.frame(OTU = rownames(phyloseq::otu_table(objG)@.Data),
+                       phyloseq::otu_table(objG)@.Data,
+                       phyloseq::tax_table(objG)@.Data,
+                       check.names = FALSE)
+metadataG <- data.frame(phyloseq::sample_data(objG), 
+                       check.names = FALSE)
+```
+
+Ampvis2 requires
+- Taxonomic ranges be and range from *Kingdom* to *Species*. 
+- The first column of the metadata be the identifier of each sample.
+
+```{r}
+# Version 1 - Phylum
+otutableP$Species <- otutableP$Genus
+AV2P <- amp_load(otutableP, metadataP)
+
+# Version 2 - Genus
+otutableG$Species <- otutableG$Genus
+AV2G <- amp_load(otutableG, metadataG)
+```
+
+Heatmap
+
+```{r}
+# Version 1 - Phylum
+# Phylum y Genus
+AmpHMP_GP <- amp_heatmap(AV2P, 
+            group_by = "SITE_ID", facet_by = "SITE_ID", plot_values = TRUE,
+            tax_show = 15, tax_aggregate = "Genus", tax_add = "Phylum",
+            # color_vector = c("lightblue3", "olivedrab3"),
+            plot_colorscale = "sqrt", plot_legendbreaks = c(0, 0.5, 1, 1.5, 2, 2.5, 3.0)) +
+  labs(title="Relative abundance for Phylum and genus")+
+  theme(legend.position = "right", 
+        legend.text = element_text(size=12, face="bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.text = element_text(color = "black", size = 12, face = "bold"),
+        axis.title = element_text(color = "black", size = 12, face = "bold"),
+        plot.title = element_text(hjust = 0.5, size=14, face="bold"))
+AmpHMP_GP
+pdf(paste(AbundanceAV2SG, "PlotAmpHMP_GP.pdf"), width=20, height=10)
+AmpHMP_GP 
+dev.off()
+svg(paste(AbundanceAV2SG, "PlotAmpHMP_GP.svg"), width=20, height=10)
+AmpHMP_GP 
+dev.off()
+
+# Phylum
+AmpHMP_P <- amp_heatmap(AV2P, 
+            group_by = "SITE_ID", facet_by = "SITE_ID", plot_values = TRUE,
+            tax_show = 15, tax_aggregate = "Phylum",
+            # color_vector = c("lightblue3", "olivedrab3"),
+            plot_colorscale = "sqrt", plot_legendbreaks = c(0, 5, 10, 20, 35, 40)) +
+  labs(title="Relative abundance for Phylum")+
+  theme(legend.position = "right", 
+        legend.text = element_text(size=12, face="bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.text = element_text(color = "black", size = 12, face = "bold"),
+        axis.title = element_text(color = "black", size = 12, face = "bold"),
+        plot.title = element_text(hjust = 0.5, size=14, face="bold"))
+AmpHMP_P
+pdf(paste(AbundanceAV2SG, "PlotAmpHMP_P.pdf"), width=20, height=10)
+AmpHMP_P 
+dev.off()
+svg(paste(AbundanceAV2SG, "PlotAmpHMP_P.svg"), width=20, height=10)
+AmpHMP_P 
+dev.off()
+
+# Genus
+AmpHMP_G <- amp_heatmap(AV2P, 
+            group_by = "SITE_ID", facet_by = "SITE_ID", plot_values = TRUE,
+            tax_show = 15, tax_aggregate = "Genus",
+            # color_vector = c("lightblue3", "olivedrab3"),
+            plot_colorscale = "sqrt", plot_legendbreaks = c(0, 0.5, 1, 1.5, 2, 2.5, 3.0)) +
+  labs(title="Relative abundance for Genus")+
+  theme(legend.position = "right", 
+        legend.text = element_text(size=12, face="bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.text = element_text(color = "black", size = 12, face = "bold"),
+        axis.title = element_text(color = "black", size = 12, face = "bold"),
+        plot.title = element_text(hjust = 0.5, size=14, face="bold"))
+AmpHMP_G
+pdf(paste(AbundanceAV2SG, "PlotAmpHMP_G.pdf"), width=20, height=10)
+AmpHMP_G 
+dev.off()
+svg(paste(AbundanceAV2SG, "PlotAmpHMP_G.svg"), width=20, height=10)
+AmpHMP_G
+dev.off()
+
+# Version 2 - Genus
+# Phylum y Genus
+AmpHMG_GP <- amp_heatmap(AV2G, 
+            group_by = "SITE_ID", facet_by = "SITE_ID", plot_values = TRUE,
+            tax_show = 15, tax_aggregate = "Genus", tax_add = "Phylum",
+            # color_vector = c("lightblue3", "olivedrab3"),
+            plot_colorscale = "sqrt", plot_legendbreaks = c(0, 1.0, 2.0, 4.0, 6.0, 8.0)) +
+  labs(title="Relative abundance for Phylum and genus")+
+  theme(legend.position = "right", 
+        legend.text = element_text(size=12, face="bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.text = element_text(color = "black", size = 12, face = "bold"),
+        axis.title = element_text(color = "black", size = 12, face = "bold"),
+        plot.title = element_text(hjust = 0.5, size=14, face="bold"))
+AmpHMG_GP
+pdf(paste(AbundanceAV2SG, "PlotAmpHMG_GP.pdf"), width=20, height=10)
+AmpHMG_GP 
+dev.off()
+svg(paste(AbundanceAV2SG, "PlotAmpHMG_GP.svg"), width=20, height=10)
+AmpHMG_GP 
+dev.off()
+
+# Phylum
+AmpHMG_P <- amp_heatmap(AV2G, 
+            group_by = "SITE_ID", facet_by = "SITE_ID", plot_values = TRUE,
+            tax_show = 15, tax_aggregate = "Phylum",
+            # color_vector = c("lightblue3", "olivedrab3"),
+            plot_colorscale = "sqrt", plot_legendbreaks = c(0, 1, 5, 10, 20, 35)) +
+  labs(title="Relative abundance for Phylum")+
+  theme(legend.position = "right", 
+        legend.text = element_text(size=12, face="bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.text = element_text(color = "black", size = 12, face = "bold"),
+        axis.title = element_text(color = "black", size = 12, face = "bold"),
+        plot.title = element_text(hjust = 0.5, size=14, face="bold"))
+AmpHMG_P
+pdf(paste(AbundanceAV2SG, "PlotAmpHMG_P.pdf"), width=20, height=10)
+AmpHMG_P 
+dev.off()
+svg(paste(AbundanceAV2SG, "PlotAmpHMG_P.svg"), width=20, height=10)
+AmpHMG_P 
+dev.off()
+
+# Genus
+AmpHMG_G <- amp_heatmap(AV2G, 
+            group_by = "SITE_ID", facet_by = "SITE_ID", plot_values = TRUE,
+            tax_show = 15, tax_aggregate = "Genus",
+            # color_vector = c("lightblue3", "olivedrab3"),
+            plot_colorscale = "sqrt", plot_legendbreaks = c(0, 1.0, 2.0, 4.0, 6.0, 8.0)) +
+  labs(title="Relative abundance for Genus")+
+  theme(legend.position = "right", 
+        legend.text = element_text(size=12, face="bold"),
+        legend.title = element_text(size = 12, face = "bold"),
+        axis.text.x=element_blank(),
+        axis.ticks.x=element_blank(),
+        axis.text = element_text(color = "black", size = 12, face = "bold"),
+        axis.title = element_text(color = "black", size = 12, face = "bold"),
+        plot.title = element_text(hjust = 0.5, size=14, face="bold"))
+AmpHMG_G
+pdf(paste(AbundanceAV2SG, "PlotAmpHMG_G.pdf"), width=20, height=10)
+AmpHMG_G 
+dev.off()
+svg(paste(AbundanceAV2SG, "PlotAmpHMG_G.svg"), width=20, height=10)
+AmpHMG_G
+dev.off()
+```
+
+# Pheatmap
+
+```{r, message = FALSE, warning = FALSE}
+PhyloP <- Phylo_P
+head(PhyloP@otu_table@.Data) 
+summary(PhyloP@otu_table@.Data)
+PhyloseqP <- tax_glom(PhyloP,taxrank = rank_names(PhyloP)[6]) 
+summary(PhyloseqP@otu_table@.Data)
+```
+
+From now on, we work with relative values and absolute values.
+
+```{r, message = FALSE, warning = FALSE}
+# Absolute
+psd.abs.100P <- filter_taxa(PhyloseqP, function(x) mean(x) > 25000.0, TRUE)
+
+# Relative
+psd.relP <- transform_sample_counts(PhyloseqP, function(x) x*100 / sum(x))
+psd.rel.1P <- filter_taxa(psd.relP, function(x) mean(x) > 1.5, TRUE)
+```
+
+The pheatmap package needs a dataframe as input, so we'll make some from the phyloseq object
+
+```{r, message = FALSE, warning = FALSE}
+#Absolute
+psd.abs.100P
+psd.abs.dfP <- as.data.frame(psd.abs.100P@otu_table@.Data)
+dim(psd.abs.dfP)
+rownames(psd.abs.dfP) <- make.names(psd.abs.100P@tax_table@.Data[,6], unique = T)
+str(psd.abs.dfP)
+
+#Relative
+psd.rel.1P
+psd.rel.dfP <- as.data.frame(psd.rel.1P@otu_table@.Data)
+dim(psd.rel.dfP)
+rownames(psd.rel.dfP) <- make.names(psd.rel.1P@tax_table@.Data[,6], unique = T)
+str(psd.rel.dfP)
+```
+
+Metadata
+
+```{r, message = FALSE, warning = FALSE}
+meta <- data.frame(row.names = rownames(metadata))
+#meta$ID <- ID=metadata$ID
+#meta$pH <- metadata$pH
+#meta$N_Total <- metadata$N_TOTAL
+#meta$P_Olsen <- metadata$P_OLSEN
+#meta$Organic <- metadata$ORGANIC
+meta$Site <- metadata$SITE_ID
+str(meta)
+```
+
+Color
+
+```{r, message = FALSE, warning = FALSE}
+# Colores del metadatos
+Color <- list(#ID=c("Ag2_Sep17"="antiquewhite", "Ag3_Sep17"="cadetblue1",
+                  #    "Ag1_Sep17"="chartreuse", "Ag3_Sep18"="azure4", 
+                  #    "Ag3_Jun19"="coral", "Ag2_Sep19"="bisque3",
+                  #    "Ag2_Sep18"="bisque3", "Ag3_Sep19"="darkcyan",
+                  #    "Ag1_Sep18"="darkmagenta", "Ag1_Sep19"="deepskyblue3"),
+                 #Year = c("2017"="deepskyblue3", "2018"="indianred4", "2019"="purple4"),
+                 #pH=c("6.7"="#bababa", "6.1"="brown4", "6.2"="#377eb8"),
+                 #N_Total = c("0.22"="darkolivegreen", "0.29"="#984ea3", "0.36"="darkgoldenrod3"),
+                 #P_Oolse = c("13.5"="darkred", "4.0"="deeppink4", "29.6"="aquamarine4"),
+                 #Organic = c("13.5"="darkseagreen4", "24.2"="gold4", "12.0"="gray"),
+                 Site = c("Ag1"="lightseagreen", "Ag2"="midnightblue", "Ag3"="mediumvioletred"))
+# Color Pheatmap
+ColorHPM <- c("#ffffff","#fff7fb","#ece2f0","#d0d1e6","#a6bddb","#67a9cf","#3690c0",
+                    "#02818a","#016c59","#014636")
+```
+
+Pheatmap
+
+```{r}
+# Aboslutos
+PHMap.AbsP <- pheatmap(main = "Absolute values at the taxonomic level of Genus", 
+                      psd.abs.dfP, color = ColorHPM, cluster_cols = TRUE, 
+                      cutree_cols = 3, cutree_rows = 4, border_color ="#000000",
+                      annotation_col = meta, annotation_colors = Color)
+PHMap.AbsP
+pdf(paste0(ResultsSG, "PlotPHMap.Abs_P.pdf"), width=20, height=10)
+PHMap.AbsP
+dev.off()
+svg(paste0(ResultsSG, "PlotPHMap.Abs_P.svg"), width=20, height=10)
+PHMap.AbsP
+dev.off()
+
+# Relativos
+PHMap.RelP <- pheatmap(main = "Relative values at the taxonomic level of Genus",
+                      psd.rel.dfP, color = ColorHPM, cluster_cols = TRUE, 
+                      cutree_cols = 3, cutree_rows = 4, border_color ="#000000",
+                      annotation_col = meta, annotation_colors = Color)
+PHMap.RelP
+pdf(paste0(ResultsSG, "PlotPHMap.Rel_P.pdf"), width=20, height=10)
+PHMap.RelP
+dev.off()
+svg(paste0(ResultsSG, "PlotPHMap.Rel_P.svg"), width=20, height=10)
+PHMap.RelP
+dev.off()
+```
