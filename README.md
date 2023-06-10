@@ -1,13 +1,13 @@
 # Bacterial community diversity in wetlands from conserved and buffer zone in Calakmul Biosphere Reserve: a monitoring before the Mayan Train
 
-Este repositorio incluye todos los scripts utilizados para en análisis metagenómico de datos obtenidos de la Reserva de la Biosfera de Calakmul, Metabarcoding y Shotgun.
+This repository includes all the scripts used for metagenomic analysis of data obtained from the Calakmul Biosphere Reserve, Metabarcoding and Shotgun.
 
-## Autores
-Investigador principal
+## Authors
+Principal Investigator
 - Karina Verdel Aranda
   - Github
 
-Investigadores asociados
+Associate Researchers
 - David Alberto García Estrada
   - Github:[DavidAlberto](https://github.com/DavidAlberto)
 - Nelly Sélem Mojica
@@ -15,10 +15,6 @@ Investigadores asociados
 - Sonia Dávila Ramos
   - Github
 
-## Análisis de datos - Metabarcoding
+## Data analysis
 
-Este análisis se encuentra en el siguiente link [16s](16s/AnalisisMetagenomaCalakmul16s.Rmd).
-
-## Análisis de datos - Shotgun
-
-Este análisis se encuentra en el siguiente link [Shotgun](Shotgun/AnalisisMetagenomaCalakmulShotgun.Rmd).
+This analysis can be found in the following link (Calakmul/Calakmul.Rmd).
