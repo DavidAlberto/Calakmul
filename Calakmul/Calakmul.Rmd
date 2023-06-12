@@ -2048,3 +2048,10 @@ svg(paste0(ResultsSG, "PlotPHMap.Rel_P.svg"), width=20, height=10)
 PHMap.RelP
 dev.off()
 ```
+
+## Session information
+
+```{r}
+sessionInfo()
+```
+

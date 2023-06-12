@@ -18,3 +18,21 @@ Associate Researchers
 ## Data analysis
 
 This analysis can be found in the following link [Calakmul](Calakmul/Calakmul.Rmd).
+
+### Run script
+
+To run the script it is necessary to download the data and place them in separate folders, the shotgun data and the rRNA 16s data.
+
+## Data
+
+### Shotgun
+
+The Shotgun metagenomic data can be downloaded from the [MG-RAST](https://www.mg-rast.org/mgmain.html?mgpage=project&project=55d11f3ab66d6770313033343737) page. 
+
+### rRNA 16s
+
+The rRNA 16s metagenomic data can be downloaded from the [SRA]() page.
+
+# Software and packages
+
+The version of [R](https://cran.r-project.org/) used is 4.2.2 and the version of the packages is included in the script in Session information.
