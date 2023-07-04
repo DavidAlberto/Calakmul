@@ -5,13 +5,13 @@ This repository includes all the scripts used for metagenomic analysis of data o
 ## Authors
 Principal Investigator
 - Karina Verdel Aranda
-  - Github
+  - Github: [KVA25](https://github.com/KVA25)
 
 Associate Researchers
 - David Alberto García Estrada
-  - Github:[DavidAlberto](https://github.com/DavidAlberto)
+  - Github: [DavidAlberto](https://github.com/DavidAlberto)
 - Nelly Sélem Mojica
-  - Github:[nselem](https://github.com/nselem)
+  - Github: [nselem](https://github.com/nselem)
 - Sonia Dávila Ramos
   - Github
 
