@@ -19,11 +19,11 @@ Associate Researchers
 
 ### Shotgun
 
-The Shotgun metagenomic data can be downloaded from the [MG-RAST](https://www.mg-rast.org/mgmain.html?mgpage=project&project=55d11f3ab66d6770313033343737) page. 
+The Shotgun metagenomic data can be downloaded from the [MG-RAST](https://www.mg-rast.org/mgmain.html?mgpage=project&project=55d11f3ab66d6770313033343737) and [SRA BioProject ID PRJNA983841](http://www.ncbi.nlm.nih.gov/bioproject/983841) pages. 
 
 ### Metabarcoding
 
-The metarbarcoding metagenomic data can be downloaded from the [SRA]() page.
+The metarbarcoding metagenomic data can be downloaded from the [SRA BioProject ID PRJNA983657](http://www.ncbi.nlm.nih.gov/bioproject/983657) page.
 
 ## Data analysis
 
