@@ -1,22 +1,27 @@
 ---
 title: "Diversity of Bacterial Communities in Wetlands of Calakmul Biosphere Reserve: A Comparative Analysis between Conserved and Semi-Urbanized Zones in Pre-Mayan Train Era"
-date: "`r Sys.Date()`"
 output: html_document
 ---
-
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_chunk$set(echo = TRUE, eval=FALSE)
 ```
 
 # Diversity of Bacterial Communities in Wetlands of Calakmul Biosphere Reserve: A Comparative Analysis between Conserved and Semi-Urbanized Zones in Pre-Mayan Train Era
 
 **Authors:**
-1. David A. García-Estrada, Unidad de Genómica Avanzada, Centro de Investigación y Estudios Avanzados del Instituto Politécnico Nacional, Irapuato, Guanajuato, México.
+
+1. David A. García-Estrada, Unidad de Genómica Avanzada, Centro de Investigación y de Estudios Avanzados del Instituto Politécnico Nacional, Irapuato, Guanajuato, México.
+
 2. Nelly Selem-Mojica, Centro de Ciencias Matemáticas, Universidad Nacional Autónoma de México (UNAM), Morelia, Mich. México
+
 3. Aída Martínez-Hernández, Colegio de Postgraduados Campus Campeche, Sihochac, Champotón, Camp. México 
+
 4. Joel Lara-Reyna, Colegio de Postgraduados Campus Campeche, Sihochac, Champotón, Camp. México 
+
 5. Sonia Dávila-Ramos, Centro de Investigación en Dinámica Celular, IICBA, Universidad Autónoma del Estado de Morelos (UAEM), Cuernavaca, Mor. México
+
 6. Karina Verdel-Aranda, CONACyT-Colegio de Postgraduados Campus Campeche, Sihochac, Champotón, Camp. México
+
 7. Present address: Tecnológico Nacional de México-Instituto Tecnológico de Chiná, Chiná, Camp. México.
 
 **Corresponding author:** Karina Verdel-Aranda, e-mail: karina.va@china.tecnm.mx
@@ -24,7 +29,9 @@ knitr::opts_chunk$set(echo = TRUE)
 ## Abstract
 
 **Background**: The Calakmul Biosphere Reserve (CBR) is known for its rich animal and plant biodiversity, yet its microbial communities remain largely unknown. The reserve does not possess permanent bodies of water, nevertheless, seasonal depressions associated with fractures create wetlands, known locally as aguadas. Given the recent construction of the Maya train that crosses the CRB, it is essential to assess the biodiversity of its microorganisms and recognize their potential as a valuable source of goods. This evaluation is pivotal in mitigating potential mismanagement of the forest ecosystem. To enhance comprehension of microbial communities, we characterized the microbiota in three different wetlands. Ag-UD1 and Ag-UD2 wetlands are located in a zone without human disturbances, while the third, Ag-SU3, is situated in a semi-urbanized zone. Sampling was carried out over a three-year period (2017, 2018, and 2019), enabling the monitoring of spatiotemporal variations in bacterial community diversity. The characterization of microbiome composition was conducted using 16S rRNA metabarcoding. Concurrently, the genomic potential of select samples was examined through shotgun metagenomics. 
+
 **Results**: Statistical analysis of alpha and beta diversity showed significant differences among the bacterial communities found in undisturbed sites Ag-UD1 and Ag-UD2, in comparison to Ag-SU3. However, no significant differences were observed among sites belonging to the undisturbed area. Furthermore, a comparative analysis at the zone level reveals substantial divergence among the communities, indicating that the geographic location of the samples significantly influences these patterns. The bacterial communities in the CBR wetlands predominantly consist of genera from phyla Actinobacteria, Acidobacteria and Proteobacteria.
+
 **Conclusion**: This characterization has identified the composition of microbial communities and provided the initial overview of the metabolic capacities of the microbiomes inhabiting the aguadas across diverse conservation zones. The three sites exhibit distinct microbial compositions, suggesting that variables such as chemical composition, natural and anthropogenic disturbances, vegetation, and fauna may play a pivotal role in determining the microbial structure of the aguadas. This study establishes a foundational baseline for evaluating the impact of climatic factors and human interventions on critical environments such as wetlands.
 
 # Script rRNA16s
@@ -621,7 +628,7 @@ Genus.sg_RRR <- transform_sample_counts(Genus.sg_RR, function(x) round(x*100 / s
 
 From here on, in the sections on Data transformation and manipulation, Abundance plots, Diversity analysis, and Different abundance visualizations, the script is similar to what was done with rRNA 16s, taking as input the objects: Phylum.sg_RR, Genus.sg_RR, Phylum.sg_RRR, Genus.sg_RRR, Genus.sg_RRR, as the case may be.
 
-## Virus
+# Virus
 
 For virus-related metagenomics analysis, the following tools were used: VIBRANT (https://github.com/AnantharamanLab/VIBRANT) and Kaiju (https://github.com/bioinformatics-centre/kaiju).
 
