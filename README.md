@@ -1,6 +1,6 @@
-# Bacterial community diversity in wetlands from conserved and buffer zone in Calakmul Biosphere Reserve: monitoring before the Mayan Train
+# Diversity of Bacterial Communities in Wetlands of Calakmul Biosphere Reserve: A Comparative Analysis between Conserved and Semi-Urbanized Zones in Pre-Mayan Train Era
 
-This repository includes all the scripts used for metagenomic analysis of data obtained from the Calakmul Biosphere Reserve, Metabarcoding and Shotgun.
+This repository includes all the scripts used for metagenomic analysis of data obtained from the Calakmul Biosphere Reserve.
 
 ## Authors
 Principal Investigator
@@ -12,8 +12,9 @@ Associate Researchers
   - Github: [DavidAlberto](https://github.com/DavidAlberto)
 - Nelly Sélem Mojica
   - Github: [nselem](https://github.com/nselem)
+- Aída Martínez-Hernández
+- Joel Lara-Reyna
 - Sonia Dávila Ramos
-  - Github
 
 ## Data
 
@@ -21,9 +22,9 @@ Associate Researchers
 
 The Shotgun metagenomic data can be downloaded from the [MG-RAST](https://www.mg-rast.org/mgmain.html?mgpage=project&project=55d11f3ab66d6770313033343737) and [SRA BioProject ID PRJNA983841](http://www.ncbi.nlm.nih.gov/bioproject/983841) pages. 
 
-### Metabarcoding
+### 16S rRNA
 
-The metarbarcoding metagenomic data can be downloaded from the [SRA BioProject ID PRJNA983657](http://www.ncbi.nlm.nih.gov/bioproject/983657) page.
+The 16S rRNA metagenomic data can be downloaded from the [SRA BioProject ID PRJNA983657](http://www.ncbi.nlm.nih.gov/bioproject/983657) page.
 
 ## Data analysis
 
